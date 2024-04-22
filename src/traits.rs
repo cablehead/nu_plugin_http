@@ -34,10 +34,8 @@ impl<R: Read + Send + 'static> Iterator for ReadIterator<R> {
 }
 
 pub fn read_to_pipeline_data<R: Read + Send + 'static>(reader: R, span: Span) -> PipelineData {
-    let read_iter = ReadIterator::new(reader, 4096);
-    let boxed_iter: Box<dyn Iterator<Item = Result<Vec<u8>>> + Send> = Box::new(read_iter);
-    let mapped_iter: Box<dyn Iterator<Item = Value> + Send> =
-        Box::new(boxed_iter.map(move |result| {
+    let iter: Box<dyn Iterator<Item = Value> + Send> =
+        Box::new(ReadIterator::new(reader, 4096).map(move |result| {
             result
                 .map(|val| Value::Binary {
                     val,
@@ -55,6 +53,6 @@ pub fn read_to_pipeline_data<R: Read + Send + 'static>(reader: R, span: Span) ->
                 })
         }));
 
-    let list_stream = ListStream::from_stream(mapped_iter, None);
+    let list_stream = ListStream::from_stream(iter, None);
     PipelineData::ListStream(list_stream, None)
 }
