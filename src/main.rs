@@ -29,7 +29,7 @@ impl PluginCommand for HTTPGet {
     fn signature(&self) -> Signature {
         Signature::build(PluginCommand::name(self))
             .required("url", SyntaxShape::String, "The url to GET")
-            .required(
+            .optional(
                 "closure",
                 SyntaxShape::Closure(Some(vec![SyntaxShape::Record(vec![])])),
                 "The closure to evaluate",
@@ -47,7 +47,7 @@ impl PluginCommand for HTTPGet {
         let engine = engine.clone();
 
         let url = call.req::<String>(0)?;
-        let closure = call.req(1)?;
+        let closure = call.opt(1)?;
         let span = call.head;
 
         let resp = reqwest::blocking::get(url)
@@ -60,11 +60,16 @@ impl PluginCommand for HTTPGet {
         let r = Value::record(r, span);
 
         let body = traits::read_to_pipeline_data(resp, span);
-        let res = engine
-            .eval_closure_with_stream(&closure, vec![r], body, true, false)
-            .map_err(|err| LabeledError::new(format!("shell error: {}", err)))?;
 
-        Ok(res)
+        if let Some(closure) = closure {
+            let res = engine
+                .eval_closure_with_stream(&closure, vec![r], body, true, false)
+                .map_err(|err| LabeledError::new(format!("shell error: {}", err)))?;
+
+            return Ok(res);
+        }
+
+        Ok(body)
     }
 }
 
