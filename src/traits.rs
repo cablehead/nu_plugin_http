@@ -1,6 +1,7 @@
-use nu_protocol::{ListStream, PipelineData, Span, Value};
 use std::io::{Read, Result};
 use std::iter::Iterator;
+
+use nu_protocol::{LabeledError, ListStream, PipelineData, ShellError, Span, Value};
 
 struct ReadIterator<R: Read + Send + 'static> {
     reader: R,
@@ -35,12 +36,23 @@ impl<R: Read + Send + 'static> Iterator for ReadIterator<R> {
 fn read_to_pipeline_data<R: Read + Send + 'static>(reader: R, span: Span) -> PipelineData {
     let read_iter = ReadIterator::new(reader, 4096);
     let boxed_iter: Box<dyn Iterator<Item = Result<Vec<u8>>> + Send> = Box::new(read_iter);
-    let mapped_iter: Box<dyn Iterator<Item = Result<Value>> + Send> =
+    let mapped_iter: Box<dyn Iterator<Item = Value> + Send> =
         Box::new(boxed_iter.map(move |result| {
-            result.map(|val| Value::Binary {
-                val,
-                internal_span: span,
-            })
+            result
+                .map(|val| Value::Binary {
+                    val,
+                    internal_span: span.clone(),
+                })
+                .map_err(|err| {
+                    ShellError::LabeledError(Box::new(LabeledError::new(format!(
+                        "Read error: {}",
+                        err
+                    ))))
+                })
+                .unwrap_or_else(|err| Value::Error {
+                    error: Box::new(err),
+                    internal_span: span.clone(),
+                })
         }));
 
     let list_stream = ListStream::from_stream(mapped_iter, None);
