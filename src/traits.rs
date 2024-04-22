@@ -1,7 +1,7 @@
-use std::io::{Read, Result};
+use std::io::Read;
 use std::iter::Iterator;
 
-use nu_protocol::{LabeledError, ListStream, PipelineData, ShellError, Span, Value};
+use nu_protocol::{LabeledError, PipelineData, RawStream, ShellError, Span};
 
 struct ReadIterator<R: Read + Send + 'static> {
     reader: R,
@@ -18,7 +18,7 @@ impl<R: Read + Send + 'static> ReadIterator<R> {
 }
 
 impl<R: Read + Send + 'static> Iterator for ReadIterator<R> {
-    type Item = Result<Vec<u8>>;
+    type Item = Result<Vec<u8>, ShellError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.reader.read(&mut self.buffer) {
@@ -28,31 +28,22 @@ impl<R: Read + Send + 'static> Iterator for ReadIterator<R> {
                 result.copy_from_slice(&self.buffer[..bytes_read]);
                 Some(Ok(result))
             }
-            Err(e) => Some(Err(e)),
+            Err(err) => Some(Err(ShellError::LabeledError(Box::new(LabeledError::new(
+                format!("Read error: {}", err),
+            ))))),
         }
     }
 }
 
 pub fn read_to_pipeline_data<R: Read + Send + 'static>(reader: R, span: Span) -> PipelineData {
-    let iter: Box<dyn Iterator<Item = Value> + Send> =
-        Box::new(ReadIterator::new(reader, 4096).map(move |result| {
-            result
-                .map(|val| Value::Binary {
-                    val,
-                    internal_span: span.clone(),
-                })
-                .map_err(|err| {
-                    ShellError::LabeledError(Box::new(LabeledError::new(format!(
-                        "Read error: {}",
-                        err
-                    ))))
-                })
-                .unwrap_or_else(|err| Value::Error {
-                    error: Box::new(err),
-                    internal_span: span.clone(),
-                })
-        }));
-
-    let list_stream = ListStream::from_stream(iter, None);
-    PipelineData::ListStream(list_stream, None)
+    let iter = Box::new(ReadIterator::new(reader, 4096));
+    let stream = RawStream::new(iter, None, span.clone(), None);
+    PipelineData::ExternalStream {
+        stdout: Some(stream),
+        stderr: None,
+        exit_code: None,
+        span: span,
+        metadata: None,
+        trim_end_newline: false,
+    }
 }
