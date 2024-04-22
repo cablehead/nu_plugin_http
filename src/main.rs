@@ -3,6 +3,8 @@ use nu_plugin::{EngineInterface, Plugin, PluginCommand};
 
 use nu_protocol::{LabeledError, PipelineData, Signature, SyntaxShape, Type, Value};
 
+mod traits;
+
 struct HTTPPlugin;
 
 impl Plugin for HTTPPlugin {
@@ -44,14 +46,30 @@ impl PluginCommand for HTTPGet {
     ) -> Result<PipelineData, LabeledError> {
         let engine = engine.clone();
 
-        let url: Value = call.req(0)?;
+        let url = call.req::<String>(0)?;
         let closure = call.req(1)?;
         let span = call.head;
 
+        let resp = reqwest::blocking::get(url)
+            .map_err(|err| LabeledError::new(format!("reqwest error: {}", err.to_string())))?;
+
+        let status = Value::int(resp.status().as_u16().into(), span);
+
+        let mut r = nu_protocol::Record::new();
+        r.insert("status", status);
+        let r = Value::record(r, span);
+
+        let body = resp
+            .text()
+            .map_err(|err| LabeledError::new(format!("reqwest error: {}", err.to_string())))?;
+
+        let input = PipelineData::Value(Value::string(body, span), None);
+
         let res = engine
-            .eval_closure(&closure, vec![url], None)
-            .unwrap_or_else(|err| Value::error(err, span));
-        Ok(PipelineData::Value(res, None))
+            .eval_closure_with_stream(&closure, vec![r], input, true, false)
+            .map_err(|err| LabeledError::new(format!("shell error: {}", err)))?;
+
+        Ok(res)
     }
 }
 
