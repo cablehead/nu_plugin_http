@@ -33,7 +33,7 @@ impl<R: Read + Send + 'static> Iterator for ReadIterator<R> {
     }
 }
 
-fn read_to_pipeline_data<R: Read + Send + 'static>(reader: R, span: Span) -> PipelineData {
+pub fn read_to_pipeline_data<R: Read + Send + 'static>(reader: R, span: Span) -> PipelineData {
     let read_iter = ReadIterator::new(reader, 4096);
     let boxed_iter: Box<dyn Iterator<Item = Result<Vec<u8>>> + Send> = Box::new(read_iter);
     let mapped_iter: Box<dyn Iterator<Item = Value> + Send> =

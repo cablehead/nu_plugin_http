@@ -59,14 +59,9 @@ impl PluginCommand for HTTPGet {
         r.insert("status", status);
         let r = Value::record(r, span);
 
-        let body = resp
-            .text()
-            .map_err(|err| LabeledError::new(format!("reqwest error: {}", err.to_string())))?;
-
-        let input = PipelineData::Value(Value::string(body, span), None);
-
+        let body = traits::read_to_pipeline_data(resp, span);
         let res = engine
-            .eval_closure_with_stream(&closure, vec![r], input, true, false)
+            .eval_closure_with_stream(&closure, vec![r], body, true, false)
             .map_err(|err| LabeledError::new(format!("shell error: {}", err)))?;
 
         Ok(res)
