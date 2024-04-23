@@ -1,7 +1,7 @@
-use nu_plugin::EvaluatedCall;
-use nu_plugin::{EngineInterface, PluginCommand};
+use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
 
-use nu_protocol::{LabeledError, PipelineData, Signature, SyntaxShape, Type, Value};
+use nu_protocol::engine::Closure;
+use nu_protocol::{LabeledError, PipelineData, Signature, Span, Spanned, SyntaxShape, Type, Value};
 
 // use crate::traits;
 use crate::HTTPPlugin;
@@ -32,7 +32,7 @@ impl PluginCommand for HTTPServe {
 
     fn run(
         &self,
-        _plugin: &HTTPPlugin,
+        plugin: &HTTPPlugin,
         engine: &EngineInterface,
         call: &EvaluatedCall,
         _input: PipelineData,
@@ -40,13 +40,26 @@ impl PluginCommand for HTTPServe {
         let closure = call.req(0)?;
         let span = call.head;
 
+        plugin.runtime.block_on(async move {
+            let _ = serve(engine, closure, span).await;
+        });
+
         let value = Value::string("hello", span);
         let body = PipelineData::Value(value, None);
-
-        let res = engine
-            .eval_closure_with_stream(&closure, vec![], body, true, false)
-            .map_err(|err| LabeledError::new(format!("shell error: {}", err)))?;
-
-        return Ok(res);
+        return Ok(body);
     }
+}
+
+async fn serve(
+    engine: &EngineInterface,
+    closure: Spanned<Closure>,
+    span: Span,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let value = Value::string("hello", span);
+    let body = PipelineData::Value(value, None);
+    let res = engine
+        .eval_closure_with_stream(&closure, vec![], body, true, false)
+        .map_err(|err| LabeledError::new(format!("shell error: {}", err)))?;
+    eprintln!("res: {:?}", &res);
+    Ok(())
 }
