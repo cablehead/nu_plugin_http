@@ -40,9 +40,7 @@ impl PluginCommand for HTTPServe {
         let closure = call.req(0)?;
         let span = call.head;
 
-
         let value = Value::string("hello", span);
-
         let body = PipelineData::Value(value, None);
 
         let res = engine
