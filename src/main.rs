@@ -5,7 +5,21 @@ use nu_protocol::{LabeledError, PipelineData, Signature, SyntaxShape, Type, Valu
 
 mod traits;
 
-struct HTTPPlugin;
+use tokio::runtime::{Builder, Runtime};
+
+struct HTTPPlugin {
+    runtime: Runtime,
+}
+
+impl HTTPPlugin {
+    pub fn new() -> Self {
+        let runtime = Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create Tokio runtime");
+        HTTPPlugin { runtime }
+    }
+}
 
 impl Plugin for HTTPPlugin {
     fn commands(&self) -> Vec<Box<dyn PluginCommand<Plugin = Self>>> {
@@ -39,11 +53,17 @@ impl PluginCommand for HTTPGet {
 
     fn run(
         &self,
-        _plugin: &HTTPPlugin,
+        plugin: &HTTPPlugin,
         engine: &EngineInterface,
         call: &EvaluatedCall,
         _input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
+        plugin.runtime.block_on(async {
+            // Simulate async computation with a delay
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            eprintln!("hello world");
+        });
+
         let engine = engine.clone();
 
         let url = call.req::<String>(0)?;
@@ -74,5 +94,6 @@ impl PluginCommand for HTTPGet {
 }
 
 fn main() {
-    serve_plugin(&HTTPPlugin, JsonSerializer)
+    let plugin = HTTPPlugin::new();
+    serve_plugin(&plugin, JsonSerializer)
 }
