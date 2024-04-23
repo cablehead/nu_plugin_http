@@ -12,7 +12,7 @@ impl PluginCommand for HTTPGet {
     type Plugin = HTTPPlugin;
 
     fn name(&self) -> &str {
-        "httpx get"
+        "h. get"
     }
 
     fn usage(&self) -> &str {
