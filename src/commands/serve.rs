@@ -41,13 +41,11 @@ impl PluginCommand for HTTPServe {
         call: &EvaluatedCall,
         _input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-        let closure = call.req(0)?;
-        let span = call.head;
-
         plugin.runtime.block_on(async move {
-            let _ = serve(engine, closure, span).await;
+            let _ = serve(engine, call).await;
         });
 
+        let span = call.head;
         let value = Value::string("hello", span);
         let body = PipelineData::Value(value, None);
         return Ok(body);
@@ -67,6 +65,7 @@ use tokio::net::TcpListener;
 
 async fn hello(
     _engine: &EngineInterface,
+    call: &EvaluatedCall,
     _: Request<hyper::body::Incoming>,
 ) -> Result<Response<Full<Bytes>>, Infallible> {
     Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
@@ -74,8 +73,7 @@ async fn hello(
 
 async fn serve(
     engine: &EngineInterface,
-    closure: Spanned<Closure>,
-    span: Span,
+    call: &EvaluatedCall,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let socket_path = Path::new("./").join("sock");
     let listener = tokio::net::UnixListener::bind(socket_path).unwrap();
@@ -84,21 +82,14 @@ async fn serve(
         let (stream, _) = listener.accept().await.unwrap();
         let io = TokioIo::new(stream);
         let engine = engine.clone();
+        let call = call.clone();
         tokio::task::spawn(async move {
             if let Err(err) = http1::Builder::new()
-                .serve_connection(io, service_fn(|req| hello(&engine, req)))
+                .serve_connection(io, service_fn(|req| hello(&engine, &call, req)))
                 .await
             {
                 eprintln!("Error serving connection: {:?}", err);
             }
         });
     }
-
-    let value = Value::string("hello", span);
-    let body = PipelineData::Value(value, None);
-    let res = engine
-        .eval_closure_with_stream(&closure, vec![], body, true, false)
-        .map_err(|err| LabeledError::new(format!("shell error: {}", err)))?;
-    eprintln!("res: {:?}", &res);
-    Ok(())
 }
