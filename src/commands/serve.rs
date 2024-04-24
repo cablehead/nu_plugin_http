@@ -1,5 +1,6 @@
 #![allow(warnings)]
 
+use std::borrow::Borrow;
 use std::error::Error;
 use std::path::Path;
 
@@ -126,33 +127,57 @@ async fn hello(
 async fn serve(
     engine: &EngineInterface,
     call: &EvaluatedCall,
-    rx: watch::Receiver<bool>,
+    mut rx: watch::Receiver<bool>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let socket_path = Path::new("./").join("sock");
     let listener = tokio::net::UnixListener::bind(socket_path)?;
 
+    use tokio::sync::watch;
+
     loop {
-        let (stream, _) = listener.accept().await.unwrap();
-        let io = TokioIo::new(stream);
-        let engine = engine.clone();
-        let call = call.clone();
-        tokio::task::spawn(async move {
-            if let Err(err) = http1::Builder::new()
-                .serve_connection(io, service_fn(|req| hello(&engine, &call, req)))
-                .await
-            {
-                // Match against the error kind to selectively ignore `NotConnected` errors
-                if let Some(std::io::ErrorKind::NotConnected) = err.source().and_then(|source| {
-                    source
-                        .downcast_ref::<std::io::Error>()
-                        .map(|io_err| io_err.kind())
-                }) {
-                    // Silently ignore the NotConnected error
-                } else {
-                    // Handle or log other errors
-                    println!("Error serving connection: {:?}", err);
+        tokio::select! {
+            result = listener.accept() => {
+                match result {
+                    Ok((stream, _)) => {
+                        tokio::task::spawn(serve_connection(
+                            engine.clone(),
+                            call.clone(),
+                            TokioIo::new(stream),
+                        ));
+                    },
+                    Err(err) => {
+                        eprintln!("Error accepting connection: {}", err);
+                    },
                 }
-            }
-        });
+            },
+            _ = rx.changed() => {
+                // TODO: graceful shutdown of inflight connections
+                break;
+            },
+        }
+    }
+    Ok(())
+}
+
+async fn serve_connection<T: std::marker::Unpin + tokio::io::AsyncWrite + tokio::io::AsyncRead>(
+    engine: EngineInterface,
+    call: EvaluatedCall,
+    io: TokioIo<T>,
+) {
+    if let Err(err) = http1::Builder::new()
+        .serve_connection(io, service_fn(|req| hello(&engine, &call, req)))
+        .await
+    {
+        // Match against the error kind to selectively ignore `NotConnected` errors
+        if let Some(std::io::ErrorKind::NotConnected) = err.source().and_then(|source| {
+            source
+                .downcast_ref::<std::io::Error>()
+                .map(|io_err| io_err.kind())
+        }) {
+            // Silently ignore the NotConnected error
+        } else {
+            // Handle or log other errors
+            println!("Error serving connection: {:?}", err);
+        }
     }
 }
