@@ -6,7 +6,9 @@ use std::path::Path;
 use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
 
 use nu_protocol::engine::Closure;
-use nu_protocol::{LabeledError, PipelineData, Signature, Span, Spanned, SyntaxShape, Type, Value};
+use nu_protocol::{
+    LabeledError, PipelineData, Record, Signature, Span, Spanned, SyntaxShape, Type, Value,
+};
 
 // use crate::traits;
 use crate::HTTPPlugin;
@@ -67,6 +69,7 @@ use tokio::net::TcpListener;
 fn run_eval(
     engine: &EngineInterface,
     call: &EvaluatedCall,
+    meta: Record,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let closure = call.req(0)?;
     let span = call.head;
@@ -74,7 +77,7 @@ fn run_eval(
     let value = Value::string("hello", span);
     let body = PipelineData::Value(value, None);
     let res = engine
-        .eval_closure_with_stream(&closure, vec![], body, true, false)
+        .eval_closure_with_stream(&closure, vec![Value::record(meta, span)], body, true, false)
         .map_err(|err| LabeledError::new(format!("shell error: {}", err)))?;
     eprintln!("res: {:?}", &res);
 
@@ -86,11 +89,20 @@ async fn hello(
     call: &EvaluatedCall,
     req: Request<hyper::body::Incoming>,
 ) -> Result<Response<Full<Bytes>>, Infallible> {
+    let span = call.head;
+    let mut headers = Record::new();
     for (key, value) in req.headers() {
+        headers.insert(
+            key.to_string(),
+            Value::string(value.to_str().unwrap().to_string(), span),
+        );
         eprintln!("key: {:?} {:?}", &key, &value);
     }
 
-    run_eval(engine, call).unwrap();
+    let mut meta = Record::new();
+    meta.insert("headers", Value::record(headers, span));
+
+    run_eval(engine, call, meta).unwrap();
     Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
 }
 
