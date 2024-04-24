@@ -87,7 +87,7 @@ fn run_eval(
     engine: &EngineInterface,
     call: &EvaluatedCall,
     meta: Record,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<PipelineData, Box<dyn std::error::Error>> {
     let closure = call.req(0)?;
     let span = call.head;
 
@@ -99,17 +99,7 @@ fn run_eval(
 
     eprintln!("res: {:?}", &res);
 
-    match res {
-        PipelineData::Value(value, _) => match value {
-            Value::String { val, .. } => eprintln!("{}", val),
-            _ => panic!("Value arm contains an unsupported variant: {:?}", value),
-        },
-        PipelineData::ListStream(_, _) => panic!("ListStream variant"),
-        PipelineData::ExternalStream { .. } => panic!("ExternalStream variant"),
-        PipelineData::Empty => panic!("Empty variant"),
-    }
-
-    Ok(())
+    Ok(res)
 }
 
 async fn hello(
@@ -131,7 +121,18 @@ async fn hello(
     meta.insert("headers", Value::record(headers, span));
     meta.insert("method", Value::string(req.method().to_string(), span));
 
-    run_eval(engine, call, meta).unwrap();
+    let res = run_eval(engine, call, meta).unwrap();
+
+    match res {
+        PipelineData::Value(value, _) => match value {
+            Value::String { val, .. } => eprintln!("{}", val),
+            _ => panic!("Value arm contains an unsupported variant: {:?}", value),
+        },
+        PipelineData::ListStream(_, _) => panic!("ListStream variant"),
+        PipelineData::ExternalStream { .. } => panic!("ExternalStream variant"),
+        PipelineData::Empty => panic!("Empty variant"),
+    }
+
     Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
 }
 
