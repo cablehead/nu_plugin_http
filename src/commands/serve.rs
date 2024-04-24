@@ -101,6 +101,7 @@ async fn hello(
 
     let mut meta = Record::new();
     meta.insert("headers", Value::record(headers, span));
+    meta.insert("method", Value::string(req.method().to_string(), span));
 
     run_eval(engine, call, meta).unwrap();
     Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
