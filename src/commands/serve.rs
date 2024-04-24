@@ -96,6 +96,7 @@ fn run_eval(
     let res = engine
         .eval_closure_with_stream(&closure, vec![Value::record(meta, span)], body, true, false)
         .map_err(|err| LabeledError::new(format!("shell error: {}", err)))?;
+
     eprintln!("res: {:?}", &res);
 
     Ok(())
