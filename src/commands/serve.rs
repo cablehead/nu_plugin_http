@@ -125,15 +125,14 @@ async fn hello(
 
     match res {
         PipelineData::Value(value, _) => match value {
-            Value::String { val, .. } => eprintln!("{}", val),
+            Value::String { val, .. } => 
+                Ok(Response::new(Full::new(Bytes::from(val)))),
             _ => panic!("Value arm contains an unsupported variant: {:?}", value),
         },
         PipelineData::ListStream(_, _) => panic!("ListStream variant"),
         PipelineData::ExternalStream { .. } => panic!("ExternalStream variant"),
         PipelineData::Empty => panic!("Empty variant"),
     }
-
-    Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
 }
 
 async fn serve(
