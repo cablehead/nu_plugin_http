@@ -63,11 +63,29 @@ use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
+fn run_eval(
+    engine: &EngineInterface,
+    call: &EvaluatedCall,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let closure = call.req(0)?;
+    let span = call.head;
+
+    let value = Value::string("hello", span);
+    let body = PipelineData::Value(value, None);
+    let res = engine
+        .eval_closure_with_stream(&closure, vec![], body, true, false)
+        .map_err(|err| LabeledError::new(format!("shell error: {}", err)))?;
+    eprintln!("res: {:?}", &res);
+
+    Ok(())
+}
+
 async fn hello(
-    _engine: &EngineInterface,
+    engine: &EngineInterface,
     call: &EvaluatedCall,
     _: Request<hyper::body::Incoming>,
 ) -> Result<Response<Full<Bytes>>, Infallible> {
+    run_eval(engine, call).unwrap();
     Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
 }
 
