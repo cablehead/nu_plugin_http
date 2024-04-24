@@ -83,7 +83,7 @@ fn run_eval(
 async fn hello(
     engine: &EngineInterface,
     call: &EvaluatedCall,
-    _: Request<hyper::body::Incoming>,
+    req: Request<hyper::body::Incoming>,
 ) -> Result<Response<Full<Bytes>>, Infallible> {
     run_eval(engine, call).unwrap();
     Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
@@ -94,7 +94,7 @@ async fn serve(
     call: &EvaluatedCall,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let socket_path = Path::new("./").join("sock");
-    let listener = tokio::net::UnixListener::bind(socket_path).unwrap();
+    let listener = tokio::net::UnixListener::bind(socket_path)?;
 
     loop {
         let (stream, _) = listener.accept().await.unwrap();
