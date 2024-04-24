@@ -1,5 +1,6 @@
 #![allow(warnings)]
 
+use std::error::Error;
 use std::path::Path;
 
 use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
@@ -85,6 +86,10 @@ async fn hello(
     call: &EvaluatedCall,
     req: Request<hyper::body::Incoming>,
 ) -> Result<Response<Full<Bytes>>, Infallible> {
+    for (key, value) in req.headers() {
+        eprintln!("key: {:?} {:?}", &key, &value);
+    }
+
     run_eval(engine, call).unwrap();
     Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
 }
@@ -106,7 +111,17 @@ async fn serve(
                 .serve_connection(io, service_fn(|req| hello(&engine, &call, req)))
                 .await
             {
-                eprintln!("Error serving connection: {:?}", err);
+                // Match against the error kind to selectively ignore `NotConnected` errors
+                if let Some(std::io::ErrorKind::NotConnected) = err.source().and_then(|source| {
+                    source
+                        .downcast_ref::<std::io::Error>()
+                        .map(|io_err| io_err.kind())
+                }) {
+                    // Silently ignore the NotConnected error
+                } else {
+                    // Handle or log other errors
+                    println!("Error serving connection: {:?}", err);
+                }
             }
         });
     }
