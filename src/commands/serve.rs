@@ -99,6 +99,16 @@ fn run_eval(
 
     eprintln!("res: {:?}", &res);
 
+    match res {
+        PipelineData::Value(value, _) => match value {
+            Value::String { val, .. } => eprintln!("{}", val),
+            _ => panic!("Value arm contains an unsupported variant: {:?}", value),
+        },
+        PipelineData::ListStream(_, _) => panic!("ListStream variant"),
+        PipelineData::ExternalStream { .. } => panic!("ExternalStream variant"),
+        PipelineData::Empty => panic!("Empty variant"),
+    }
+
     Ok(())
 }
 
@@ -178,7 +188,7 @@ async fn serve_connection<T: std::marker::Unpin + tokio::io::AsyncWrite + tokio:
             // Silently ignore the NotConnected error
         } else {
             // Handle or log other errors
-            println!("Error serving connection: {:?}", err);
+            eprintln!("Error serving connection: {:?}", err);
         }
     }
 }
