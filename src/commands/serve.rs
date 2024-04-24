@@ -34,7 +34,7 @@ impl PluginCommand for HTTPServe {
                 SyntaxShape::Closure(Some(vec![SyntaxShape::Record(vec![])])),
                 "The closure to evaluate for each connection",
             )
-            .input_output_type(Type::Nothing, Type::Any)
+            .input_output_type(Type::Any, Type::Any)
     }
 
     fn run(
@@ -42,14 +42,28 @@ impl PluginCommand for HTTPServe {
         plugin: &HTTPPlugin,
         engine: &EngineInterface,
         call: &EvaluatedCall,
-        _input: PipelineData,
+        input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
+        let (tx, mut rx) = watch::channel(false);
+
+        match input {
+            PipelineData::ExternalStream { exit_code, .. } => {
+                let exit_code = exit_code.unwrap();
+                std::thread::spawn(move || {
+                    exit_code.stream.for_each(drop);
+                    let _ = tx.send(true);
+                    eprintln!("i'm outie");
+                });
+            }
+            _ => return Err(LabeledError::new("ExternalStream expected")),
+        }
+
         plugin.runtime.block_on(async move {
-            let _ = serve(engine, call).await;
+            let _ = serve(engine, call, rx).await;
         });
 
         let span = call.head;
-        let value = Value::string("hello", span);
+        let value = Value::string("peace", span);
         let body = PipelineData::Value(value, None);
         return Ok(body);
     }
@@ -65,6 +79,8 @@ use hyper::service::service_fn;
 use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
+
+use tokio::sync::watch;
 
 fn run_eval(
     engine: &EngineInterface,
@@ -110,6 +126,7 @@ async fn hello(
 async fn serve(
     engine: &EngineInterface,
     call: &EvaluatedCall,
+    rx: watch::Receiver<bool>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let socket_path = Path::new("./").join("sock");
     let listener = tokio::net::UnixListener::bind(socket_path)?;
