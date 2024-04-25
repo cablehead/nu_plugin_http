@@ -1,7 +1,5 @@
 #![allow(warnings)]
 
-use futures_util::StreamExt;
-
 use std::borrow::Borrow;
 use std::error::Error;
 use std::path::Path;
@@ -106,12 +104,13 @@ fn run_eval(
 
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
+use http_body_util::StreamBody;
 
 async fn hello(
     engine: &EngineInterface,
     call: &EvaluatedCall,
     req: Request<hyper::body::Incoming>,
-) -> Result<Response<BoxBody<Bytes, hyper::Error>>, Infallible> {
+) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
     let span = call.head;
     let mut headers = Record::new();
     for (key, value) in req.headers() {

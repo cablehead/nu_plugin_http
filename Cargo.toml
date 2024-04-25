@@ -15,4 +15,3 @@ hyper-util = { version = "0.1", features = ["full"] }
 bytes = "1.6.0"
 http-body-util = "0.1.1"
 tokio-stream = "0.1.15"
-futures-util = "0.3.30"
