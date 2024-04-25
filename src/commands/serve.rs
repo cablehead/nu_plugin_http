@@ -83,7 +83,10 @@ use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
+use tokio_stream::StreamExt;
+
 use tokio::sync::watch;
+use tokio_stream::wrappers::ReceiverStream;
 
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
@@ -138,7 +141,8 @@ fn run_eval(
     match res {
         PipelineData::Value(value, _) => match value {
             Value::String { val, .. } => {
-                tx.blocking_send(Ok(val.into())).expect("send through channel");
+                tx.blocking_send(Ok(val.into()))
+                    .expect("send through channel");
             }
             _ => panic!("Value arm contains an unsupported variant: {:?}", value),
         },
@@ -152,7 +156,8 @@ fn run_eval(
                         value
                     ),
                 };
-                tx.blocking_send(Ok(value.into())).expect("send through channel");
+                tx.blocking_send(Ok(value.into()))
+                    .expect("send through channel");
             }
         }
         PipelineData::ExternalStream { .. } => panic!("ExternalStream variant"),
@@ -179,7 +184,8 @@ async fn hello(
     meta.insert("headers", Value::record(headers, span));
     meta.insert("method", Value::string(req.method().to_string(), span));
 
-    let (tx, mut rx) = mpsc::channel(32);
+    let (tx, mut closure_rx) = mpsc::channel(32);
+    let (mut closure_tx, rx) = mpsc::channel(32);
 
     let mut body = req.into_body();
 
@@ -189,7 +195,7 @@ async fn hello(
             match frame {
                 Ok(data) => {
                     // Send the frame data through the channel
-                    if let Err(err) = tx.send(Ok(data.into_data().unwrap())).await {
+                    if let Err(err) = tx.send(Ok(data.into_data().unwrap().to_vec())).await {
                         eprintln!("Error sending frame: {}", err);
                         break;
                     }
@@ -205,13 +211,22 @@ async fn hello(
         }
     });
 
-    Ok(Response::new(full("foo")))
+    let engine = engine.clone();
+    let call = call.clone();
 
-    /*
-    let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+    std::thread::spawn(move || {
+        run_eval(&engine, &call, meta, closure_rx, closure_tx);
+    });
+
+    let stream = ReceiverStream::new(rx);
+    let stream = stream.map(|data| {
+        data.map(|data| {
+            eprintln!("streaming");
+            Frame::data(bytes::Bytes::from(data))
+        })
+    });
     let body = StreamBody::new(stream).boxed();
     Ok(Response::new(body))
-    */
 }
 
 async fn serve(
