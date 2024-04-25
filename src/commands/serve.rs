@@ -83,25 +83,6 @@ use tokio::net::TcpListener;
 
 use tokio::sync::watch;
 
-fn run_eval(
-    engine: &EngineInterface,
-    call: &EvaluatedCall,
-    meta: Record,
-) -> Result<PipelineData, Box<dyn std::error::Error>> {
-    let closure = call.req(0)?;
-    let span = call.head;
-
-    let value = Value::string("hello", span);
-    let body = PipelineData::Value(value, None);
-    let res = engine
-        .eval_closure_with_stream(&closure, vec![Value::record(meta, span)], body, true, false)
-        .map_err(|err| LabeledError::new(format!("shell error: {}", err)))?;
-
-    eprintln!("res: {:?}", &res);
-
-    Ok(res)
-}
-
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use http_body_util::StreamBody;
@@ -125,7 +106,14 @@ async fn hello(
     meta.insert("headers", Value::record(headers, span));
     meta.insert("method", Value::string(req.method().to_string(), span));
 
-    let res = run_eval(engine, call, meta).unwrap();
+    let closure = call.req(0).unwrap();
+
+    let value = Value::string("hello", span);
+    let body = PipelineData::Value(value, None);
+    let res = engine
+        .eval_closure_with_stream(&closure, vec![Value::record(meta, span)], body, true, false)
+        .map_err(|err| LabeledError::new(format!("shell error: {}", err)))
+        .unwrap();
 
     match res {
         PipelineData::Value(value, _) => match value {
