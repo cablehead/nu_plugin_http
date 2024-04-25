@@ -89,6 +89,77 @@ use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use http_body_util::StreamBody;
 
+fn run_eval(
+    engine: &EngineInterface,
+    call: &EvaluatedCall,
+    meta: Record,
+    mut rx: mpsc::Receiver<Result<Vec<u8>, hyper::Error>>,
+    mut tx: mpsc::Sender<Result<Vec<u8>, hyper::Error>>,
+) {
+    let closure = call.req(0).unwrap();
+    let span = call.head;
+
+    let iter = std::iter::from_fn(move || {
+        Some(
+            rx.blocking_recv()?
+                .map_err(|err| {
+                    ShellError::LabeledError(Box::new(LabeledError::new(format!(
+                        "Read error: {}",
+                        err
+                    ))))
+                })
+                .map(|bytes| bytes.to_vec()),
+        )
+    });
+
+    let stream = RawStream::new(
+        Box::new(iter) as Box<dyn Iterator<Item = Result<Vec<u8>, ShellError>> + Send>,
+        None,
+        span.clone(),
+        None,
+    );
+
+    let body = PipelineData::ExternalStream {
+        stdout: Some(stream),
+        stderr: None,
+        exit_code: None,
+        span: span,
+        metadata: None,
+        trim_end_newline: false,
+    };
+
+    eprintln!("HERE");
+
+    let res = engine
+        .eval_closure_with_stream(&closure, vec![Value::record(meta, span)], body, true, false)
+        .map_err(|err| LabeledError::new(format!("shell error: {}", err)))
+        .unwrap();
+
+    match res {
+        PipelineData::Value(value, _) => match value {
+            Value::String { val, .. } => {
+                tx.blocking_send(Ok(val.into())).expect("send through channel");
+            }
+            _ => panic!("Value arm contains an unsupported variant: {:?}", value),
+        },
+
+        PipelineData::ListStream(ls, _) => {
+            for value in ls.stream {
+                let value = match value {
+                    Value::String { val, .. } => val,
+                    _ => panic!(
+                        "ListStream::Value arm contains an unsupported variant: {:?}",
+                        value
+                    ),
+                };
+                tx.blocking_send(Ok(value.into())).expect("send through channel");
+            }
+        }
+        PipelineData::ExternalStream { .. } => panic!("ExternalStream variant"),
+        PipelineData::Empty => panic!("Empty variant"),
+    }
+}
+
 async fn hello(
     engine: &EngineInterface,
     call: &EvaluatedCall,
@@ -108,97 +179,39 @@ async fn hello(
     meta.insert("headers", Value::record(headers, span));
     meta.insert("method", Value::string(req.method().to_string(), span));
 
-    let closure = call.req(0).unwrap();
-
-    let (tx, mut rx) = mpsc::channel(32); // Create a channel with a buffer size of 32
+    let (tx, mut rx) = mpsc::channel(32);
 
     let mut body = req.into_body();
 
-    std::thread::spawn(move || {
-        // Spawn a new thread to read the request body asynchronously
-        tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(async move {
-                while let Some(frame) = body.frame().await {
-                    match frame {
-                        Ok(data) => {
-                            // Send the frame data through the channel
-                            if let Err(err) = tx.send(Ok(data.into_data().unwrap())).await {
-                                eprintln!("Error sending frame: {}", err);
-                                break;
-                            }
-                        }
-                        Err(err) => {
-                            // Send the error through the channel and break the loop
-                            if let Err(err) = tx.send(Err(err)).await {
-                                eprintln!("Error sending error: {}", err);
-                            }
-                            break;
-                        }
+    tokio::task::spawn(async move {
+        while let Some(frame) = body.frame().await {
+            eprintln!("FRAME: {:?}", &frame);
+            match frame {
+                Ok(data) => {
+                    // Send the frame data through the channel
+                    if let Err(err) = tx.send(Ok(data.into_data().unwrap())).await {
+                        eprintln!("Error sending frame: {}", err);
+                        break;
                     }
                 }
-            });
-    });
-
-    let iter = std::iter::from_fn(move || {
-        Some(rx.blocking_recv().unwrap().map_err(|err| {
-            ShellError::LabeledError(Box::new(LabeledError::new(format!("Read error: {}", err))))
-        }))
-    });
-
-    let stream = RawStream::new(
-        Box::new(iter) as Box<dyn Iterator<Item = Result<Vec<u8>, ShellError>> + Send>,
-        None,
-        span.clone(),
-        None,
-    );
-
-    let body = PipelineData::ExternalStream {
-        stdout: Some(stream),
-        stderr: None,
-        exit_code: None,
-        span: span,
-        metadata: None,
-        trim_end_newline: false,
-    };
-
-    let res = engine
-        .eval_closure_with_stream(&closure, vec![Value::record(meta, span)], body, true, false)
-        .map_err(|err| LabeledError::new(format!("shell error: {}", err)))
-        .unwrap();
-
-    match res {
-        PipelineData::Value(value, _) => match value {
-            Value::String { val, .. } => {
-                let body = full(val);
-                Ok(Response::new(body))
-            }
-            _ => panic!("Value arm contains an unsupported variant: {:?}", value),
-        },
-
-        PipelineData::ListStream(ls, _) => {
-            let (tx, rx) = mpsc::channel(32);
-
-            std::thread::spawn(move || {
-                for value in ls.stream {
-                    let value = match value {
-                        Value::String { val, .. } => Frame::data(Bytes::from(val)),
-                        _ => panic!(
-                            "ListStream::Value arm contains an unsupported variant: {:?}",
-                            value
-                        ),
-                    };
-                    tx.blocking_send(Ok(value)).expect("send through channel");
+                Err(err) => {
+                    // Send the error through the channel and break the loop
+                    if let Err(err) = tx.send(Err(err)).await {
+                        eprintln!("Error sending error: {}", err);
+                    }
+                    break;
                 }
-            });
-
-            let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
-            let body = StreamBody::new(stream).boxed();
-            Ok(Response::new(body))
+            }
         }
-        PipelineData::ExternalStream { .. } => panic!("ExternalStream variant"),
-        PipelineData::Empty => panic!("Empty variant"),
-    }
+    });
+
+    Ok(Response::new(full("foo")))
+
+    /*
+    let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+    let body = StreamBody::new(stream).boxed();
+    Ok(Response::new(body))
+    */
 }
 
 async fn serve(
