@@ -8,7 +8,8 @@ use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
 
 use nu_protocol::engine::Closure;
 use nu_protocol::{
-    LabeledError, PipelineData, Record, Signature, Span, Spanned, SyntaxShape, Type, Value,
+    LabeledError, PipelineData, RawStream, Record, ShellError, Signature, Span, Spanned,
+    SyntaxShape, Type, Value,
 };
 
 // use crate::traits;
@@ -80,6 +81,7 @@ use hyper::service::service_fn;
 use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
 
 use tokio::sync::watch;
 
@@ -108,8 +110,58 @@ async fn hello(
 
     let closure = call.req(0).unwrap();
 
-    let value = Value::string("hello", span);
-    let body = PipelineData::Value(value, None);
+    let (tx, mut rx) = mpsc::channel(32); // Create a channel with a buffer size of 32
+
+    let mut body = req.into_body();
+
+    std::thread::spawn(move || {
+        // Spawn a new thread to read the request body asynchronously
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async move {
+                while let Some(frame) = body.frame().await {
+                    match frame {
+                        Ok(data) => {
+                            // Send the frame data through the channel
+                            if let Err(err) = tx.send(Ok(data.into_data().unwrap())).await {
+                                eprintln!("Error sending frame: {}", err);
+                                break;
+                            }
+                        }
+                        Err(err) => {
+                            // Send the error through the channel and break the loop
+                            if let Err(err) = tx.send(Err(err)).await {
+                                eprintln!("Error sending error: {}", err);
+                            }
+                            break;
+                        }
+                    }
+                }
+            });
+    });
+
+    let iter = std::iter::from_fn(move || {
+        Some(rx.blocking_recv().unwrap().map_err(|err| {
+            ShellError::LabeledError(Box::new(LabeledError::new(format!("Read error: {}", err))))
+        }))
+    });
+
+    let stream = RawStream::new(
+        Box::new(iter) as Box<dyn Iterator<Item = Result<Vec<u8>, ShellError>> + Send>,
+        None,
+        span.clone(),
+        None,
+    );
+
+    let body = PipelineData::ExternalStream {
+        stdout: Some(stream),
+        stderr: None,
+        exit_code: None,
+        span: span,
+        metadata: None,
+        trim_end_newline: false,
+    };
+
     let res = engine
         .eval_closure_with_stream(&closure, vec![Value::record(meta, span)], body, true, false)
         .map_err(|err| LabeledError::new(format!("shell error: {}", err)))
@@ -125,8 +177,6 @@ async fn hello(
         },
 
         PipelineData::ListStream(ls, _) => {
-            use tokio::sync::mpsc;
-
             let (tx, rx) = mpsc::channel(32);
 
             std::thread::spawn(move || {
