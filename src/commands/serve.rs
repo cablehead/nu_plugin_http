@@ -97,7 +97,7 @@ fn run_eval(
     call: &EvaluatedCall,
     meta: Record,
     mut rx: mpsc::Receiver<Result<Vec<u8>, hyper::Error>>,
-    mut tx: mpsc::Sender<Result<Vec<u8>, hyper::Error>>,
+    mut tx: mpsc::Sender<Result<Vec<u8>, ShellError>>,
 ) {
     let closure = call.req(0).unwrap();
     let span = call.head;
@@ -160,8 +160,14 @@ fn run_eval(
                     .expect("send through channel");
             }
         }
-        PipelineData::ExternalStream { .. } => panic!("ExternalStream variant"),
-        PipelineData::Empty => panic!("Empty variant"),
+        PipelineData::ExternalStream { stdout, .. } => {
+            if let Some(stdout) = stdout {
+                for value in stdout.stream {
+                    tx.blocking_send(value).expect("send through channel");
+                }
+            }
+        }
+        PipelineData::Empty => (),
     }
 }
 
@@ -169,20 +175,23 @@ async fn hello(
     engine: &EngineInterface,
     call: &EvaluatedCall,
     req: Request<hyper::body::Incoming>,
-) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
+) -> Result<Response<BoxBody<Bytes, ShellError>>, hyper::Error> {
     let span = call.head;
+
     let mut headers = Record::new();
     for (key, value) in req.headers() {
         headers.insert(
             key.to_string(),
             Value::string(value.to_str().unwrap().to_string(), span),
         );
-        eprintln!("key: {:?} {:?}", &key, &value);
     }
+
+    let uri = req.uri();
 
     let mut meta = Record::new();
     meta.insert("headers", Value::record(headers, span));
     meta.insert("method", Value::string(req.method().to_string(), span));
+    meta.insert("path", Value::string(uri.path().to_string(), span));
 
     let (tx, mut closure_rx) = mpsc::channel(32);
     let (mut closure_tx, rx) = mpsc::channel(32);
