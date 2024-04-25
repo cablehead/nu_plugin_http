@@ -1,5 +1,7 @@
 #![allow(warnings)]
 
+use futures_util::StreamExt;
+
 use std::borrow::Borrow;
 use std::error::Error;
 use std::path::Path;
@@ -74,7 +76,7 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 
 use http_body_util::Full;
-use hyper::body::Bytes;
+use hyper::body::{Bytes, Frame};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
@@ -102,11 +104,14 @@ fn run_eval(
     Ok(res)
 }
 
+use http_body_util::combinators::BoxBody;
+use http_body_util::BodyExt;
+
 async fn hello(
     engine: &EngineInterface,
     call: &EvaluatedCall,
     req: Request<hyper::body::Incoming>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
+) -> Result<Response<BoxBody<Bytes, hyper::Error>>, Infallible> {
     let span = call.head;
     let mut headers = Record::new();
     for (key, value) in req.headers() {
@@ -125,11 +130,37 @@ async fn hello(
 
     match res {
         PipelineData::Value(value, _) => match value {
-            Value::String { val, .. } => 
-                Ok(Response::new(Full::new(Bytes::from(val)))),
+            Value::String { val, .. } => {
+                let body = Full::new(Bytes::from(val))
+                    .map_err(|never| match never {})
+                    .boxed();
+                Ok(Response::new(body))
+            }
             _ => panic!("Value arm contains an unsupported variant: {:?}", value),
         },
-        PipelineData::ListStream(_, _) => panic!("ListStream variant"),
+
+        PipelineData::ListStream(ls, _) => {
+            use tokio::sync::mpsc;
+
+            let (tx, rx) = mpsc::channel(32);
+
+            std::thread::spawn(move || {
+                for value in ls.stream {
+                    let value = match value {
+                        Value::String { val, .. } => Frame::data(Bytes::from(val)),
+                        _ => panic!(
+                            "ListStream::Value arm contains an unsupported variant: {:?}",
+                            value
+                        ),
+                    };
+                    tx.blocking_send(Ok(value)).expect("send through channel");
+                }
+            });
+
+            let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+            let body = StreamBody::new(stream).boxed();
+            Ok(Response::new(body))
+        }
         PipelineData::ExternalStream { .. } => panic!("ExternalStream variant"),
         PipelineData::Empty => panic!("Empty variant"),
     }
