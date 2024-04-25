@@ -130,9 +130,7 @@ async fn hello(
     match res {
         PipelineData::Value(value, _) => match value {
             Value::String { val, .. } => {
-                let body = Full::new(Bytes::from(val))
-                    .map_err(|never| match never {})
-                    .boxed();
+                let body = full(val);
                 Ok(Response::new(body))
             }
             _ => panic!("Value arm contains an unsupported variant: {:?}", value),
@@ -221,4 +219,10 @@ async fn serve_connection<T: std::marker::Unpin + tokio::io::AsyncWrite + tokio:
             eprintln!("Error serving connection: {:?}", err);
         }
     }
+}
+
+fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
+    Full::new(chunk.into())
+        .map_err(|never| match never {})
+        .boxed()
 }
