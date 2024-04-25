@@ -7,7 +7,7 @@ plugin stop http
 
 # ^sleep 6000 | h. serve { |req| $in }
 
-let c = { |req| $in }
+let c = { |req| each { |x| $x | str upcase } }
 ^sleep 6000 | h. serve $c
 
 
