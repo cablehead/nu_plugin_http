@@ -27,6 +27,7 @@ impl HTTPPlugin {
         &self,
         url: String,
     ) -> Result<(Parts, Receiver<Result<Bytes, Error>>), Box<dyn std::error::Error>> {
+        // TODO: bring back TCP support (and TLS :/)
         eprintln!("hello world: {:?}", &url);
 
         let stream = tokio::net::UnixStream::connect(url)

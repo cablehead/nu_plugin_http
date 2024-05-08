@@ -45,8 +45,6 @@ impl PluginCommand for HTTPGet {
 
         eprintln!("meta: {:?}", &meta);
 
-        let engine = engine.clone();
-
         let closure = call.opt(1)?;
         let span = call.head;
 
