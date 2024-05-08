@@ -2,7 +2,6 @@ use nu_plugin::{Plugin, PluginCommand};
 
 mod commands;
 mod plugin;
-mod traits;
 
 pub use plugin::HTTPPlugin;
 

@@ -1,6 +1,12 @@
-use hyper_util::rt::TokioIo;
+use bytes::Bytes;
+
+use http::response::Parts;
 
 use tokio::runtime::{Builder, Runtime};
+use tokio::sync::mpsc::Receiver;
+
+use hyper::Error;
+use hyper_util::rt::TokioIo;
 
 pub struct HTTPPlugin {
     pub runtime: Runtime,
@@ -17,21 +23,17 @@ impl HTTPPlugin {
 }
 
 impl HTTPPlugin {
-    pub async fn process_url(&self, url: String) -> Result<(), Box<dyn std::error::Error>> {
-        let url = url.parse::<hyper::Uri>().unwrap();
-        if url.scheme_str() != Some("http") {
-            eprintln!("This example only works with 'http' URLs.");
-        }
-
+    pub async fn process_url(
+        &self,
+        url: String,
+    ) -> Result<(Parts, Receiver<Result<Bytes, Error>>), Box<dyn std::error::Error>> {
         eprintln!("hello world: {:?}", &url);
 
-        let host = url.host().expect("uri has no host");
-        let port = url.port_u16().unwrap_or(80);
-        let addr = format!("{}:{}", host, port);
-        let stream = tokio::net::TcpStream::connect(addr).await?;
+        let stream = tokio::net::UnixStream::connect(url)
+            .await
+            .expect("Failed to connect to server");
         let io = TokioIo::new(stream);
 
-        use bytes::Bytes;
         use http_body_util::BodyExt;
         use http_body_util::Empty;
         use hyper::client::conn;
@@ -46,30 +48,32 @@ impl HTTPPlugin {
             }
         });
 
-        let authority = url.authority().unwrap().clone();
+        let req = Request::builder().body(Empty::<Bytes>::new())?;
 
-        let path = url.path();
-        let req = Request::builder()
-            .uri(path)
-            .header(hyper::header::HOST, authority.as_str())
-            .body(Empty::<Bytes>::new())?;
+        let res = request_sender.send_request(req).await?;
+        let (meta, mut body) = res.into_parts();
 
-        let mut res = request_sender.send_request(req).await?;
+        let (tx, rx) = tokio::sync::mpsc::channel(32);
 
-        eprintln!("Response: {}", res.status());
-        eprintln!("Headers: {:#?}\n", res.headers());
-
-        // Stream the body, writing each chunk to stdout as we get it
-        // (instead of buffering and printing at the end).
-        while let Some(next) = res.frame().await {
-            let frame = next?;
-            if let Some(chunk) = frame.data_ref() {
-                eprintln!("chunk: {:?}", &chunk);
+        tokio::spawn(async move {
+            while let Some(next) = body.frame().await {
+                match next {
+                    Ok(frame) => {
+                        if let Some(chunk) = frame.data_ref() {
+                            if tx.send(Ok(chunk.clone())).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        if tx.send(Err(e)).await.is_err() {
+                            break;
+                        }
+                    }
+                }
             }
-        }
+        });
 
-        eprintln!("\n\nDone!");
-
-        Ok(())
+        Ok((meta, rx))
     }
 }

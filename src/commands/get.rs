@@ -1,9 +1,8 @@
-use nu_plugin::EvaluatedCall;
-use nu_plugin::{EngineInterface, PluginCommand};
+use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
+use nu_protocol::{
+    LabeledError, PipelineData, RawStream, Record, ShellError, Signature, SyntaxShape, Type, Value,
+};
 
-use nu_protocol::{LabeledError, PipelineData, Signature, SyntaxShape, Type, Value};
-
-use crate::traits;
 use crate::HTTPPlugin;
 
 pub struct HTTPGet;
@@ -39,26 +38,61 @@ impl PluginCommand for HTTPGet {
     ) -> Result<PipelineData, LabeledError> {
         let url = call.req::<String>(0)?;
 
-        plugin.runtime.block_on(async move {
-            let _ = plugin.process_url(url).await;
-        });
+        let (meta, mut rx) = plugin
+            .runtime
+            .block_on(async move { plugin.process_url(url).await })
+            .unwrap();
 
-        let url = call.req::<String>(0)?;
+        eprintln!("meta: {:?}", &meta);
+
         let engine = engine.clone();
 
         let closure = call.opt(1)?;
         let span = call.head;
 
-        let resp = reqwest::blocking::get(url)
-            .map_err(|err| LabeledError::new(format!("reqwest error: {}", err.to_string())))?;
+        let mut headers = Record::new();
+        for (key, value) in meta.headers.iter() {
+            headers.insert(
+                key.to_string(),
+                Value::string(value.to_str().unwrap().to_string(), span),
+            );
+        }
 
-        let status = Value::int(resp.status().as_u16().into(), span);
+        let status = Value::int(meta.status.as_u16().into(), span);
 
-        let mut r = nu_protocol::Record::new();
+        let mut r = Record::new();
+        r.insert("headers", Value::record(headers, span));
         r.insert("status", status);
         let r = Value::record(r, span);
 
-        let body = traits::read_to_pipeline_data(resp, span);
+        let iter = std::iter::from_fn(move || {
+            Some(
+                rx.blocking_recv()?
+                    .map_err(|err| {
+                        ShellError::LabeledError(Box::new(LabeledError::new(format!(
+                            "Read error: {}",
+                            err
+                        ))))
+                    })
+                    .map(|bytes| bytes.to_vec()),
+            )
+        });
+
+        let stream = RawStream::new(
+            Box::new(iter) as Box<dyn Iterator<Item = Result<Vec<u8>, ShellError>> + Send>,
+            None,
+            span.clone(),
+            None,
+        );
+
+        let body = PipelineData::ExternalStream {
+            stdout: Some(stream),
+            stderr: None,
+            exit_code: None,
+            span,
+            metadata: None,
+            trim_end_newline: false,
+        };
 
         if let Some(closure) = closure {
             let res = engine

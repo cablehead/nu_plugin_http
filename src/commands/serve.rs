@@ -126,7 +126,7 @@ fn run_eval(
         stdout: Some(stream),
         stderr: None,
         exit_code: None,
-        span: span,
+        span,
         metadata: None,
         trim_end_newline: false,
     };
