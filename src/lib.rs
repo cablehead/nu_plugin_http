@@ -1,8 +1,8 @@
 use nu_plugin::{Plugin, PluginCommand};
 
+mod bridge;
 mod commands;
 mod plugin;
-mod bridge;
 
 pub use plugin::HTTPPlugin;
 
