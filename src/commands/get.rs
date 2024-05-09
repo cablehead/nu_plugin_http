@@ -12,7 +12,7 @@ impl PluginCommand for HTTPGet {
     type Plugin = HTTPPlugin;
 
     fn name(&self) -> &str {
-        "h. get"
+        "h. request"
     }
 
     fn usage(&self) -> &str {
@@ -21,6 +21,7 @@ impl PluginCommand for HTTPGet {
 
     fn signature(&self) -> Signature {
         Signature::build(PluginCommand::name(self))
+            .required("method", SyntaxShape::String, "The request method")
             .required("url", SyntaxShape::String, "The url to GET")
             .optional(
                 "closure",
@@ -37,7 +38,8 @@ impl PluginCommand for HTTPGet {
         call: &EvaluatedCall,
         input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-        let url = call.req::<String>(0)?;
+        let method = call.req::<String>(0)?;
+        let url = call.req::<String>(1)?;
 
         eprintln!("input: {:?}", &input);
 
@@ -45,12 +47,12 @@ impl PluginCommand for HTTPGet {
 
         let (meta, mut rx) = plugin
             .runtime
-            .block_on(async move { plugin.process_url(url, body).await })
+            .block_on(async move { plugin.request(method, url, body).await })
             .unwrap();
 
         eprintln!("meta: {:?}", &meta);
 
-        let closure = call.opt(1)?;
+        let closure = call.opt(2)?;
         let span = call.head;
 
         let mut headers = Record::new();

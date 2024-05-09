@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use bytes::Bytes;
 
 use http::response::Parts;
@@ -25,8 +27,9 @@ impl HTTPPlugin {
 }
 
 impl HTTPPlugin {
-    pub async fn process_url(
+    pub async fn request(
         &self,
+        method: String,
         url: String,
         body: bridge::Body,
     ) -> Result<(Parts, Receiver<Result<Bytes, Error>>), Box<dyn std::error::Error>> {
@@ -51,8 +54,9 @@ impl HTTPPlugin {
             }
         });
 
+        let method = http::method::Method::from_str(&method.to_uppercase())?;
         let body = body.to_http_body();
-        let req = Request::builder().body(body)?;
+        let req = Request::builder().method(method).body(body)?;
 
         let res = request_sender.send_request(req).await?;
         let (meta, mut body) = res.into_parts();
