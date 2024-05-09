@@ -3,6 +3,7 @@ use nu_protocol::{
     LabeledError, PipelineData, RawStream, Record, ShellError, Signature, SyntaxShape, Type, Value,
 };
 
+use crate::bridge;
 use crate::HTTPPlugin;
 
 pub struct HTTPGet;
@@ -26,7 +27,7 @@ impl PluginCommand for HTTPGet {
                 SyntaxShape::Closure(Some(vec![SyntaxShape::Record(vec![])])),
                 "The closure to evaluate",
             )
-            .input_output_type(Type::Nothing, Type::Any)
+            .input_output_type(Type::String, Type::Any)
     }
 
     fn run(
@@ -34,13 +35,17 @@ impl PluginCommand for HTTPGet {
         plugin: &HTTPPlugin,
         engine: &EngineInterface,
         call: &EvaluatedCall,
-        _input: PipelineData,
+        input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
         let url = call.req::<String>(0)?;
 
+        eprintln!("input: {:?}", &input);
+
+        let body = bridge::Body::from_pipeline_data(input)?;
+
         let (meta, mut rx) = plugin
             .runtime
-            .block_on(async move { plugin.process_url(url).await })
+            .block_on(async move { plugin.process_url(url, body).await })
             .unwrap();
 
         eprintln!("meta: {:?}", &meta);

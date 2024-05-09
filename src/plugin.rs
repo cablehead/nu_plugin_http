@@ -8,6 +8,8 @@ use tokio::sync::mpsc::Receiver;
 use hyper::Error;
 use hyper_util::rt::TokioIo;
 
+use crate::bridge;
+
 pub struct HTTPPlugin {
     pub runtime: Runtime,
 }
@@ -26,6 +28,7 @@ impl HTTPPlugin {
     pub async fn process_url(
         &self,
         url: String,
+        body: bridge::Body,
     ) -> Result<(Parts, Receiver<Result<Bytes, Error>>), Box<dyn std::error::Error>> {
         // TODO: bring back TCP support (and TLS :/)
         eprintln!("hello world: {:?}", &url);
@@ -36,7 +39,6 @@ impl HTTPPlugin {
         let io = TokioIo::new(stream);
 
         use http_body_util::BodyExt;
-        use http_body_util::Empty;
         use hyper::client::conn;
         use hyper::Request;
 
@@ -49,7 +51,8 @@ impl HTTPPlugin {
             }
         });
 
-        let req = Request::builder().body(Empty::<Bytes>::new())?;
+        let body = body.to_http_body();
+        let req = Request::builder().body(body)?;
 
         let res = request_sender.send_request(req).await?;
         let (meta, mut body) = res.into_parts();
