@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
 use nu_protocol::{
     LabeledError, PipelineData, RawStream, Record, ShellError, Signature, SyntaxShape, Type, Value,
@@ -39,7 +41,10 @@ impl PluginCommand for HTTPGet {
         input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
         let method = call.req::<String>(0)?;
+
         let url = call.req::<String>(1)?;
+        let cwd = engine.get_current_dir()?;
+        let url = Path::new(&cwd).join(Path::new(&url)).to_string_lossy().into_owned();
 
         eprintln!("input: {:?}", &input);
 

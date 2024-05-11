@@ -36,6 +36,8 @@ impl HTTPPlugin {
         // TODO: bring back TCP support (and TLS :/)
         eprintln!("hello world: {:?}", &url);
 
+        eprintln!("{}", std::env::current_dir().unwrap().display());
+
         let stream = tokio::net::UnixStream::connect(url)
             .await
             .expect("Failed to connect to server");
