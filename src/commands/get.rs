@@ -91,7 +91,7 @@ impl PluginCommand for HTTPGet {
         let stream = RawStream::new(
             Box::new(iter) as Box<dyn Iterator<Item = Result<Vec<u8>, ShellError>> + Send>,
             None,
-            span.clone(),
+            span,
             None,
         );
 

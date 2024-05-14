@@ -52,7 +52,7 @@ impl PluginCommand for HTTPServe {
             PipelineData::ExternalStream { exit_code, .. } => {
                 let exit_code = exit_code.unwrap();
                 std::thread::spawn(move || {
-                    exit_code.stream.for_each(drop);
+                    exit_code.drain();
                     let _ = tx.send(true);
                     eprintln!("i'm outie");
                 });
@@ -148,7 +148,7 @@ fn run_eval(
         },
 
         PipelineData::ListStream(ls, _) => {
-            for value in ls.stream {
+            for value in ls.into_inner() {
                 let value = match value {
                     Value::String { val, .. } => val,
                     _ => panic!(

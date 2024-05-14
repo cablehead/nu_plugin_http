@@ -2,7 +2,6 @@ use std::pin::Pin;
 
 use bytes::Bytes;
 
-use http_body;
 use http_body_util;
 use http_body_util::BodyExt;
 
