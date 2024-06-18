@@ -85,6 +85,7 @@ impl PluginCommand for HTTPGet {
             ByteStreamType::Unknown,
             move |buffer: &mut Vec<u8>| match rx.blocking_recv() {
                 Some(Ok(bytes)) => {
+                    eprintln!("bytes: {:?}", &bytes);
                     buffer.extend_from_slice(&bytes);
                     Ok(true)
                 }
