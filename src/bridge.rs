@@ -17,6 +17,7 @@ pub enum Body {
 
 impl Body {
     pub fn from_pipeline_data(input: PipelineData) -> Result<Body, LabeledError> {
+        eprintln!("input: {:?}", &input);
         match input {
             PipelineData::Value(value, _) => match value {
                 Value::String { val, .. } => Ok(Body::Full(val.as_bytes().to_vec())),

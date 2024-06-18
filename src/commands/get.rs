@@ -2,8 +2,8 @@ use std::path::Path;
 
 use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
 use nu_protocol::{
-    ByteStream, ByteStreamType, LabeledError, PipelineData, Record, ShellError, Signature, SyntaxShape, Type,
-    Value,
+    ByteStream, ByteStreamType, LabeledError, PipelineData, Record, ShellError, Signature,
+    SyntaxShape, Type, Value,
 };
 
 use crate::bridge;
