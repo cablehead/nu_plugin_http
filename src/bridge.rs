@@ -29,7 +29,7 @@ impl Body {
             PipelineData::ListStream(stream, _) => {
                 panic!()
             }
-            PipelineData::ExternalStream { stdout, .. } => {
+            PipelineData::ByteStream(_, _) => {
                 panic!()
             }
             PipelineData::Empty => Ok(Body::Empty),

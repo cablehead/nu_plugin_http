@@ -952,8 +952,9 @@ dependencies = [
 
 [[package]]
 name = "nu-engine"
-version = "0.93.1"
-source = "git+https://github.com/nushell/nushell.git?branch=main#aa46bc97b354d28c14c5ad2c51c9eb7f94276bec"
+version = "0.94.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c30d540e769f468448fe4f2ffe9833b3dd600ab196e02a8cbf9098e39804d4df"
 dependencies = [
  "nu-glob",
  "nu-path",
@@ -963,13 +964,15 @@ dependencies = [
 
 [[package]]
 name = "nu-glob"
-version = "0.93.1"
-source = "git+https://github.com/nushell/nushell.git?branch=main#aa46bc97b354d28c14c5ad2c51c9eb7f94276bec"
+version = "0.94.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72d3681b6b6751322271e4c0d5764cc4f53fbd129e119aa74a3142ca8a725ed7"
 
 [[package]]
 name = "nu-path"
-version = "0.93.1"
-source = "git+https://github.com/nushell/nushell.git?branch=main#aa46bc97b354d28c14c5ad2c51c9eb7f94276bec"
+version = "0.94.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cca82b7ebc3ffcc23c280d0a422e95789259ff918e02d996cb9301c26cb5b368"
 dependencies = [
  "dirs-next",
  "omnipath",
@@ -978,8 +981,9 @@ dependencies = [
 
 [[package]]
 name = "nu-plugin"
-version = "0.93.1"
-source = "git+https://github.com/nushell/nushell.git?branch=main#aa46bc97b354d28c14c5ad2c51c9eb7f94276bec"
+version = "0.94.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcba21feeff55e733c463b6f30872f65bce6f3e5b4e5f63a738490c010ca69ec"
 dependencies = [
  "log",
  "nix",
@@ -992,8 +996,9 @@ dependencies = [
 
 [[package]]
 name = "nu-plugin-core"
-version = "0.93.1"
-source = "git+https://github.com/nushell/nushell.git?branch=main#aa46bc97b354d28c14c5ad2c51c9eb7f94276bec"
+version = "0.94.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7537c2b5c85ac74199dfc7cbb7a54b4d2dbee5a8bda663eaea451012bf2266a"
 dependencies = [
  "interprocess",
  "log",
@@ -1007,8 +1012,9 @@ dependencies = [
 
 [[package]]
 name = "nu-plugin-protocol"
-version = "0.93.1"
-source = "git+https://github.com/nushell/nushell.git?branch=main#aa46bc97b354d28c14c5ad2c51c9eb7f94276bec"
+version = "0.94.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d710b0b9f8fa36f7d6b342fdd4d8613cc9af04b9252e3cb7ed37c95660902d39"
 dependencies = [
  "bincode",
  "nu-protocol",
@@ -1020,8 +1026,9 @@ dependencies = [
 
 [[package]]
 name = "nu-protocol"
-version = "0.93.1"
-source = "git+https://github.com/nushell/nushell.git?branch=main#aa46bc97b354d28c14c5ad2c51c9eb7f94276bec"
+version = "0.94.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4e47fc3ee009e469c23fd0d7c2cce49474f4fcf5a330240b9bce5a7d4103ee5"
 dependencies = [
  "brotli",
  "byte-unit",
@@ -1031,23 +1038,26 @@ dependencies = [
  "indexmap",
  "lru",
  "miette",
+ "nix",
  "nu-path",
  "nu-system",
  "nu-utils",
  "num-format",
+ "os_pipe",
  "rmp-serde",
  "serde",
- "serde_json",
  "thiserror",
  "typetag",
 ]
 
 [[package]]
 name = "nu-system"
-version = "0.93.1"
-source = "git+https://github.com/nushell/nushell.git?branch=main#aa46bc97b354d28c14c5ad2c51c9eb7f94276bec"
+version = "0.94.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97619456b3cde26ef4b346df475ffedaa79c9a04ffed32f9f9e9cb152b3be38b"
 dependencies = [
  "chrono",
+ "itertools",
  "libc",
  "libproc",
  "log",
@@ -1062,8 +1072,9 @@ dependencies = [
 
 [[package]]
 name = "nu-utils"
-version = "0.93.1"
-source = "git+https://github.com/nushell/nushell.git?branch=main#aa46bc97b354d28c14c5ad2c51c9eb7f94276bec"
+version = "0.94.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4a88fdc4783c773dbe7342d632e827cedb268957d040fb69a5432d87d4ba7b5"
 dependencies = [
  "crossterm_winapi",
  "log",
@@ -1141,6 +1152,16 @@ name = "once_cell"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
+
+[[package]]
+name = "os_pipe"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29d73ba8daf8fac13b0501d1abeddcfe21ba7401ada61a819144b6c2a4f32209"
+dependencies = [
+ "libc",
+ "windows-sys 0.52.0",
+]
 
 [[package]]
 name = "owo-colors"

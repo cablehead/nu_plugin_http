@@ -2,7 +2,8 @@ use std::path::Path;
 
 use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
 use nu_protocol::{
-    LabeledError, PipelineData, RawStream, Record, ShellError, Signature, SyntaxShape, Type, Value,
+    ByteStream, ByteStreamType, LabeledError, PipelineData, Record, ShellError, Signature, SyntaxShape, Type,
+    Value,
 };
 
 use crate::bridge;
@@ -44,7 +45,10 @@ impl PluginCommand for HTTPGet {
 
         let url = call.req::<String>(1)?;
         let cwd = engine.get_current_dir()?;
-        let url = Path::new(&cwd).join(Path::new(&url)).to_string_lossy().into_owned();
+        let url = Path::new(&cwd)
+            .join(Path::new(&url))
+            .to_string_lossy()
+            .into_owned();
 
         eprintln!("input: {:?}", &input);
 
@@ -75,43 +79,30 @@ impl PluginCommand for HTTPGet {
         r.insert("status", status);
         let r = Value::record(r, span);
 
-        let iter = std::iter::from_fn(move || {
-            Some(
-                rx.blocking_recv()?
-                    .map_err(|err| {
-                        ShellError::LabeledError(Box::new(LabeledError::new(format!(
-                            "Read error: {}",
-                            err
-                        ))))
-                    })
-                    .map(|bytes| bytes.to_vec()),
-            )
-        });
-
-        let stream = RawStream::new(
-            Box::new(iter) as Box<dyn Iterator<Item = Result<Vec<u8>, ShellError>> + Send>,
-            None,
+        let stream = ByteStream::from_fn(
             span,
             None,
+            ByteStreamType::Unknown,
+            move |buffer: &mut Vec<u8>| match rx.blocking_recv() {
+                Some(Ok(bytes)) => {
+                    buffer.extend_from_slice(&bytes);
+                    Ok(true)
+                }
+                Some(Err(err)) => Err(ShellError::LabeledError(Box::new(LabeledError::new(
+                    format!("Read error: {}", err),
+                )))),
+                None => Ok(false),
+            },
         );
-
-        let body = PipelineData::ExternalStream {
-            stdout: Some(stream),
-            stderr: None,
-            exit_code: None,
-            span,
-            metadata: None,
-            trim_end_newline: false,
-        };
 
         if let Some(closure) = closure {
             let res = engine
-                .eval_closure_with_stream(&closure, vec![r], body, true, false)
+                .eval_closure_with_stream(&closure, vec![r], stream.into(), true, false)
                 .map_err(|err| LabeledError::new(format!("shell error: {}", err)))?;
 
             return Ok(res);
         }
 
-        Ok(body)
+        Ok(stream.into())
     }
 }

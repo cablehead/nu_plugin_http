@@ -8,8 +8,8 @@ use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
 
 use nu_protocol::engine::Closure;
 use nu_protocol::{
-    LabeledError, PipelineData, RawStream, Record, ShellError, Signature, Span, Spanned,
-    SyntaxShape, Type, Value,
+    LabeledError, PipelineData, Record, ShellError, Signature, Span, Spanned,
+    SyntaxShape, Type, Value, ByteStream, ByteStreamType,
 };
 
 // use crate::traits;
@@ -48,6 +48,7 @@ impl PluginCommand for HTTPServe {
     ) -> Result<PipelineData, LabeledError> {
         let (tx, mut rx) = watch::channel(false);
 
+        /*
         match input {
             PipelineData::ExternalStream { exit_code, .. } => {
                 let exit_code = exit_code.unwrap();
@@ -59,6 +60,7 @@ impl PluginCommand for HTTPServe {
             }
             _ => return Err(LabeledError::new("ExternalStream expected")),
         }
+        */
 
         plugin.runtime.block_on(async move {
             let _ = serve(engine, call, rx).await;
@@ -102,39 +104,26 @@ fn run_eval(
     let closure = call.req(0).unwrap();
     let span = call.head;
 
-    let iter = std::iter::from_fn(move || {
-        Some(
-            rx.blocking_recv()?
-                .map_err(|err| {
-                    ShellError::LabeledError(Box::new(LabeledError::new(format!(
-                        "Read error: {}",
-                        err
-                    ))))
-                })
-                .map(|bytes| bytes.to_vec()),
-        )
-    });
-
-    let stream = RawStream::new(
-        Box::new(iter) as Box<dyn Iterator<Item = Result<Vec<u8>, ShellError>> + Send>,
-        None,
-        span.clone(),
-        None,
-    );
-
-    let body = PipelineData::ExternalStream {
-        stdout: Some(stream),
-        stderr: None,
-        exit_code: None,
-        span,
-        metadata: None,
-        trim_end_newline: false,
-    };
+        let stream = ByteStream::from_fn(
+            span,
+            None,
+            ByteStreamType::Unknown,
+            move |buffer: &mut Vec<u8>| match rx.blocking_recv() {
+                Some(Ok(bytes)) => {
+                    buffer.extend_from_slice(&bytes);
+                    Ok(true)
+                }
+                Some(Err(err)) => Err(ShellError::LabeledError(Box::new(LabeledError::new(
+                    format!("Read error: {}", err),
+                )))),
+                None => Ok(false),
+            },
+        );
 
     eprintln!("HERE");
 
     let res = engine
-        .eval_closure_with_stream(&closure, vec![Value::record(meta, span)], body, true, false)
+        .eval_closure_with_stream(&closure, vec![Value::record(meta, span)], stream.into(), true, false)
         .map_err(|err| LabeledError::new(format!("shell error: {}", err)))
         .unwrap();
 
@@ -160,6 +149,7 @@ fn run_eval(
                     .expect("send through channel");
             }
         }
+        /*
         PipelineData::ExternalStream { stdout, .. } => {
             if let Some(stdout) = stdout {
                 for value in stdout.stream {
@@ -167,6 +157,8 @@ fn run_eval(
                 }
             }
         }
+        */
+        PipelineData::ByteStream(_, _) => { panic!() }
         PipelineData::Empty => (),
     }
 }
