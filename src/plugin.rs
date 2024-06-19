@@ -29,6 +29,7 @@ impl HTTPPlugin {
 impl HTTPPlugin {
     pub async fn request(
         &self,
+        mut ctrlc_rx: tokio::sync::watch::Receiver<()>,
         method: String,
         url: String,
         body: bridge::Body,
@@ -69,18 +70,27 @@ impl HTTPPlugin {
         let (tx, rx) = tokio::sync::mpsc::channel(32);
 
         tokio::spawn(async move {
-            while let Some(next) = body.frame().await {
-                match next {
-                    Ok(frame) => {
-                        if let Some(chunk) = frame.data_ref() {
-                            if tx.send(Ok(chunk.clone())).await.is_err() {
-                                break;
-                            }
-                        }
+            loop {
+                tokio::select! {
+                    _ = ctrlc_rx.changed() => {
+                        // The close signal has been received, break the loop
+                        break;
                     }
-                    Err(e) => {
-                        if tx.send(Err(e)).await.is_err() {
-                            break;
+                    frame = body.frame() => {
+                        match frame {
+                            Some(Ok(frame)) => {
+                                if let Some(chunk) = frame.data_ref() {
+                                    if tx.send(Ok(chunk.clone())).await.is_err() {
+                                        break;
+                                    }
+                                }
+                            }
+                            Some(Err(e)) => {
+                                if tx.send(Err(e)).await.is_err() {
+                                    break;
+                                }
+                            }
+                            None => break, // No more frames
                         }
                     }
                 }

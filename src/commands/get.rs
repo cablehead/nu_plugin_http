@@ -54,9 +54,17 @@ impl PluginCommand for HTTPGet {
 
         let body = bridge::Body::from_pipeline_data(input)?;
 
+        let (ctrlc_tx, ctrlc_rx) = tokio::sync::watch::channel(());
+        //
+        // spawn an os thread to send on ctrlc_tx in 1 second
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            let _ = ctrlc_tx.send(());
+        });
+
         let (meta, mut rx) = plugin
             .runtime
-            .block_on(async move { plugin.request(method, url, body).await })
+            .block_on(async move { plugin.request(ctrlc_rx, method, url, body).await })
             .unwrap();
 
         eprintln!("meta: {:?}", &meta);
