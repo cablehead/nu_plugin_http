@@ -209,10 +209,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_split_unix_socket_url() {
+    fn test_split_url() {
         let url = "./store/sock//?follow";
         let (path, url) = split_unix_socket_url(url);
         assert_eq!(path, "./store/sock");
         assert_eq!(url, "/?follow");
+    }
+
+    #[test]
+    fn test_no_url() {
+        let url = "./store/sock";
+        let (path, url) = split_unix_socket_url(url);
+        assert_eq!(path, "./store/sock");
+        assert_eq!(url, "/");
     }
 }
