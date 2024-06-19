@@ -199,9 +199,13 @@ async fn request(
 }
 
 fn split_unix_socket_url(url: &str) -> (&str, &str) {
-    let (path, url) = url.split_at(url.rfind("//").unwrap());
-    let url = &url[1..];
-    (path, url)
+    if let Some(pos) = url.rfind("//") {
+        let (path, url) = url.split_at(pos);
+        let url = &url[1..]; // Skip the first '/'
+        (path, url)
+    } else {
+        (url, "/")
+    }
 }
 
 #[cfg(test)]
@@ -219,6 +223,14 @@ mod tests {
     #[test]
     fn test_no_url() {
         let url = "./store/sock";
+        let (path, url) = split_unix_socket_url(url);
+        assert_eq!(path, "./store/sock");
+        assert_eq!(url, "/");
+    }
+
+    #[test]
+    fn test_trailing_slash() {
+        let url = "./store/sock//";
         let (path, url) = split_unix_socket_url(url);
         assert_eq!(path, "./store/sock");
         assert_eq!(url, "/");
