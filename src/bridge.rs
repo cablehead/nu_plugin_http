@@ -27,7 +27,7 @@ impl Body {
                     &value
                 ))),
             },
-            PipelineData::ListStream(stream, _) => {
+            PipelineData::ListStream(_, _) => {
                 panic!()
             }
             PipelineData::ByteStream(_, _) => {
