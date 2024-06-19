@@ -1,5 +1,5 @@
-mod get;
+mod request;
 mod serve;
 
-pub use get::HTTPGet;
+pub use request::HTTPRequest;
 pub use serve::HTTPServe;

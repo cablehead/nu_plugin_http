@@ -9,9 +9,9 @@ use nu_protocol::{
 use crate::bridge;
 use crate::HTTPPlugin;
 
-pub struct HTTPGet;
+pub struct HTTPRequest;
 
-impl PluginCommand for HTTPGet {
+impl PluginCommand for HTTPRequest {
     type Plugin = HTTPPlugin;
 
     fn name(&self) -> &str {
@@ -19,13 +19,13 @@ impl PluginCommand for HTTPGet {
     }
 
     fn usage(&self) -> &str {
-        "Perform a HTTP get request"
+        "Perform a HTTP client request"
     }
 
     fn signature(&self) -> Signature {
         Signature::build(PluginCommand::name(self))
             .required("method", SyntaxShape::String, "The request method")
-            .required("url", SyntaxShape::String, "The url to GET")
+            .required("uri", SyntaxShape::String, "The request uri")
             .optional(
                 "closure",
                 SyntaxShape::Closure(Some(vec![SyntaxShape::Record(vec![])])),
