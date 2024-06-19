@@ -2,7 +2,6 @@ use std::pin::Pin;
 
 use bytes::Bytes;
 
-use http_body_util;
 use http_body_util::BodyExt;
 
 use tokio::sync::mpsc::Receiver;
@@ -37,7 +36,7 @@ impl Body {
         }
     }
 
-    pub fn to_http_body(
+    pub fn into_http_body(
         self,
     ) -> Pin<Box<dyn http_body::Body<Data = Bytes, Error = hyper::Error> + Send>> {
         match self {

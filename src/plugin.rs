@@ -61,7 +61,7 @@ impl HTTPPlugin {
         });
 
         let method = http::method::Method::from_str(&method.to_uppercase())?;
-        let body = body.to_http_body();
+        let body = body.into_http_body();
         let req = Request::builder().method(method).uri(url).body(body)?;
 
         let res = request_sender.send_request(req).await?;
@@ -98,6 +98,12 @@ impl HTTPPlugin {
         });
 
         Ok((meta, rx))
+    }
+}
+
+impl Default for HTTPPlugin {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
