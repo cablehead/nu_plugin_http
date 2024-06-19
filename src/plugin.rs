@@ -34,11 +34,14 @@ impl HTTPPlugin {
         body: bridge::Body,
     ) -> Result<(Parts, Receiver<Result<Bytes, Error>>), Box<dyn std::error::Error>> {
         // TODO: bring back TCP support (and TLS :/)
-        eprintln!("hello world: {:?}", &url);
+
+        let (path, url) = split_unix_socket_url(&url);
+        // method, path, url
+        eprintln!("REQUEST: {} {} {}", method, path, url);
 
         eprintln!("{}", std::env::current_dir().unwrap().display());
 
-        let stream = tokio::net::UnixStream::connect(url)
+        let stream = tokio::net::UnixStream::connect(path)
             .await
             .expect("Failed to connect to server");
         let io = TokioIo::new(stream);
@@ -58,7 +61,7 @@ impl HTTPPlugin {
 
         let method = http::method::Method::from_str(&method.to_uppercase())?;
         let body = body.to_http_body();
-        let req = Request::builder().method(method).body(body)?;
+        let req = Request::builder().method(method).uri(url).body(body)?;
 
         let res = request_sender.send_request(req).await?;
         let (meta, mut body) = res.into_parts();
@@ -85,5 +88,24 @@ impl HTTPPlugin {
         });
 
         Ok((meta, rx))
+    }
+}
+
+fn split_unix_socket_url(url: &str) -> (&str, &str) {
+    let (path, url) = url.split_at(url.rfind("//").unwrap());
+    let url = &url[1..];
+    (path, url)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_split_unix_socket_url() {
+        let url = "./store/sock//?follow";
+        let (path, url) = split_unix_socket_url(url);
+        assert_eq!(path, "./store/sock");
+        assert_eq!(url, "/?follow");
     }
 }
