@@ -66,12 +66,19 @@ impl PluginCommand for HTTPRequest {
         let body = bridge::Body::from_pipeline_data(input)?;
 
         let (ctrlc_tx, ctrlc_rx) = tokio::sync::watch::channel(());
-        //
+
+        let guard = engine.register_ctrlc_handler(Box::new(move || {
+            eprintln!("ctrlc handler");
+            let _ = ctrlc_tx.send(());
+        }));
+
+        /*
         // spawn an os thread to send on ctrlc_tx in 1 second
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_secs(1));
             let _ = ctrlc_tx.send(());
         });
+        */
 
         let (meta, mut rx) = plugin
             .runtime
@@ -113,6 +120,8 @@ impl PluginCommand for HTTPRequest {
                 None => Ok(false),
             },
         );
+
+        eprintln!("peace");
 
         if let Some(closure) = closure {
             let res = engine

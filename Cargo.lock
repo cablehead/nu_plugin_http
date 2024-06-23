@@ -962,7 +962,6 @@ dependencies = [
 [[package]]
 name = "nu-derive-value"
 version = "0.94.3"
-source = "git+file:///Users/andy/.s/sessions/03B73LNTW7UJJP1EWGDQMZNH3/nushell?branch=main#12991cd36feedaac0ccb86be61e78a8ca4ffd261"
 dependencies = [
  "convert_case",
  "proc-macro-error",
@@ -974,7 +973,6 @@ dependencies = [
 [[package]]
 name = "nu-engine"
 version = "0.94.3"
-source = "git+file:///Users/andy/.s/sessions/03B73LNTW7UJJP1EWGDQMZNH3/nushell?branch=main#12991cd36feedaac0ccb86be61e78a8ca4ffd261"
 dependencies = [
  "nu-glob",
  "nu-path",
@@ -985,12 +983,10 @@ dependencies = [
 [[package]]
 name = "nu-glob"
 version = "0.94.3"
-source = "git+file:///Users/andy/.s/sessions/03B73LNTW7UJJP1EWGDQMZNH3/nushell?branch=main#12991cd36feedaac0ccb86be61e78a8ca4ffd261"
 
 [[package]]
 name = "nu-path"
 version = "0.94.3"
-source = "git+file:///Users/andy/.s/sessions/03B73LNTW7UJJP1EWGDQMZNH3/nushell?branch=main#12991cd36feedaac0ccb86be61e78a8ca4ffd261"
 dependencies = [
  "dirs-next",
  "omnipath",
@@ -1000,7 +996,6 @@ dependencies = [
 [[package]]
 name = "nu-plugin"
 version = "0.94.3"
-source = "git+file:///Users/andy/.s/sessions/03B73LNTW7UJJP1EWGDQMZNH3/nushell?branch=main#12991cd36feedaac0ccb86be61e78a8ca4ffd261"
 dependencies = [
  "log",
  "nix",
@@ -1014,7 +1009,6 @@ dependencies = [
 [[package]]
 name = "nu-plugin-core"
 version = "0.94.3"
-source = "git+file:///Users/andy/.s/sessions/03B73LNTW7UJJP1EWGDQMZNH3/nushell?branch=main#12991cd36feedaac0ccb86be61e78a8ca4ffd261"
 dependencies = [
  "interprocess",
  "log",
@@ -1029,7 +1023,6 @@ dependencies = [
 [[package]]
 name = "nu-plugin-protocol"
 version = "0.94.3"
-source = "git+file:///Users/andy/.s/sessions/03B73LNTW7UJJP1EWGDQMZNH3/nushell?branch=main#12991cd36feedaac0ccb86be61e78a8ca4ffd261"
 dependencies = [
  "bincode",
  "nu-protocol",
@@ -1042,7 +1035,6 @@ dependencies = [
 [[package]]
 name = "nu-protocol"
 version = "0.94.3"
-source = "git+file:///Users/andy/.s/sessions/03B73LNTW7UJJP1EWGDQMZNH3/nushell?branch=main#12991cd36feedaac0ccb86be61e78a8ca4ffd261"
 dependencies = [
  "brotli",
  "byte-unit",
@@ -1069,7 +1061,6 @@ dependencies = [
 [[package]]
 name = "nu-system"
 version = "0.94.3"
-source = "git+file:///Users/andy/.s/sessions/03B73LNTW7UJJP1EWGDQMZNH3/nushell?branch=main#12991cd36feedaac0ccb86be61e78a8ca4ffd261"
 dependencies = [
  "chrono",
  "itertools",
@@ -1088,7 +1079,6 @@ dependencies = [
 [[package]]
 name = "nu-utils"
 version = "0.94.3"
-source = "git+file:///Users/andy/.s/sessions/03B73LNTW7UJJP1EWGDQMZNH3/nushell?branch=main#12991cd36feedaac0ccb86be61e78a8ca4ffd261"
 dependencies = [
  "crossterm_winapi",
  "log",
