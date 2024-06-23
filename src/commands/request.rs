@@ -13,8 +13,8 @@ use hyper_util::rt::TokioIo;
 
 use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
 use nu_protocol::{
-    ByteStream, ByteStreamType, LabeledError, PipelineData, Record, ShellError, Signature,
-    SyntaxShape, Type, Value,
+    engine::ctrlc, ByteStream, ByteStreamType, LabeledError, PipelineData, Record, ShellError,
+    Signature, SyntaxShape, Type, Value,
 };
 
 use crate::bridge;
@@ -67,16 +67,14 @@ impl PluginCommand for HTTPRequest {
 
         let (ctrlc_tx, ctrlc_rx) = tokio::sync::watch::channel(());
 
-        let guard = engine.register_ctrlc_handler(Box::new(move || {
+        let _guard = engine.register_ctrlc_handler(Box::new(move || {
             eprintln!("ctrlc handler");
             let _ = ctrlc_tx.send(());
         }));
 
-        let ctrlc_rx = GuardedValue::new(ctrlc_rx, guard);
-
         let (meta, mut rx) = plugin
             .runtime
-            .block_on(async move { request(ctrlc_rx, method, url, body).await })
+            .block_on(async move { request(ctrlc_rx, _guard, method, url, body).await })
             .unwrap();
 
         eprintln!("meta: {:?}", &meta);
@@ -131,6 +129,7 @@ impl PluginCommand for HTTPRequest {
 
 async fn request(
     mut ctrlc_rx: tokio::sync::watch::Receiver<()>,
+    _guard: ctrlc::Guard,
     method: String,
     url: String,
     body: bridge::Body,
@@ -171,6 +170,7 @@ async fn request(
     let (tx, rx) = tokio::sync::mpsc::channel(32);
 
     tokio::spawn(async move {
+        let _guard = _guard;
         loop {
             tokio::select! {
                 _ = ctrlc_rx.changed() => {
@@ -237,34 +237,5 @@ mod tests {
         let (path, url) = split_unix_socket_url(url);
         assert_eq!(path, "./store/sock");
         assert_eq!(url, "/");
-    }
-}
-
-
-
-use std::ops::{Deref, DerefMut};
-
-pub struct GuardedValue<T, G> {
-    value: T,
-    _guard: G,
-}
-
-impl<T, G> GuardedValue<T, G> {
-    pub fn new(value: T, guard: G) -> Self {
-        GuardedValue { value, _guard: guard }
-    }
-}
-
-impl<T, G> Deref for GuardedValue<T, G> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
-}
-
-impl<T, G> DerefMut for GuardedValue<T, G> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.value
     }
 }
