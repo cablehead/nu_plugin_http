@@ -72,6 +72,8 @@ impl PluginCommand for HTTPRequest {
             let _ = ctrlc_tx.send(());
         }));
 
+        let ctrlc_rx = GuardedValue::new(ctrlc_rx, guard);
+
         let (meta, mut rx) = plugin
             .runtime
             .block_on(async move { request(ctrlc_rx, method, url, body).await })
@@ -235,5 +237,34 @@ mod tests {
         let (path, url) = split_unix_socket_url(url);
         assert_eq!(path, "./store/sock");
         assert_eq!(url, "/");
+    }
+}
+
+
+
+use std::ops::{Deref, DerefMut};
+
+pub struct GuardedValue<T, G> {
+    value: T,
+    _guard: G,
+}
+
+impl<T, G> GuardedValue<T, G> {
+    pub fn new(value: T, guard: G) -> Self {
+        GuardedValue { value, _guard: guard }
+    }
+}
+
+impl<T, G> Deref for GuardedValue<T, G> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+impl<T, G> DerefMut for GuardedValue<T, G> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.value
     }
 }
