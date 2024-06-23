@@ -68,7 +68,6 @@ impl PluginCommand for HTTPRequest {
         let (ctrlc_tx, ctrlc_rx) = tokio::sync::watch::channel(());
 
         let _guard = engine.register_ctrlc_handler(Box::new(move || {
-            eprintln!("ctrlc handler");
             let _ = ctrlc_tx.send(());
         }));
 
