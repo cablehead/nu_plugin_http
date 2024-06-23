@@ -72,14 +72,6 @@ impl PluginCommand for HTTPRequest {
             let _ = ctrlc_tx.send(());
         }));
 
-        /*
-        // spawn an os thread to send on ctrlc_tx in 1 second
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            let _ = ctrlc_tx.send(());
-        });
-        */
-
         let (meta, mut rx) = plugin
             .runtime
             .block_on(async move { request(ctrlc_rx, method, url, body).await })
