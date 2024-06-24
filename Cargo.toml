@@ -20,4 +20,3 @@ http-body = "1.0.0"
 
 nu-plugin = { path = "/Users/andy/.s/sessions/03B73LNTW7UJJP1EWGDQMZNH3/nushell/crates/nu-plugin"}
 nu-protocol = { path = "/Users/andy/.s/sessions/03B73LNTW7UJJP1EWGDQMZNH3/nushell/crates/nu-protocol"}
-
