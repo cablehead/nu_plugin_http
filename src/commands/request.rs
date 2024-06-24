@@ -65,10 +65,10 @@ impl PluginCommand for HTTPRequest {
 
         let body = bridge::Body::from_pipeline_data(input)?;
 
-        let (ctrlc_tx, ctrlc_rx) = tokio::sync::watch::channel(());
+        let (ctrlc_tx, ctrlc_rx) = tokio::sync::watch::channel(false);
 
         let _guard = engine.register_ctrlc_handler(Box::new(move || {
-            let _ = ctrlc_tx.send(());
+            let _ = ctrlc_tx.send(true);
         }));
 
         let (meta, mut rx) = plugin
@@ -127,7 +127,7 @@ impl PluginCommand for HTTPRequest {
 }
 
 async fn request(
-    mut ctrlc_rx: tokio::sync::watch::Receiver<()>,
+    mut ctrlc_rx: tokio::sync::watch::Receiver<bool>,
     _guard: ctrlc::Guard,
     method: String,
     url: String,

@@ -6,10 +6,10 @@ use std::path::Path;
 
 use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
 
-use nu_protocol::engine::Closure;
+use nu_protocol::engine::{ctrlc, Closure};
 use nu_protocol::{
-    LabeledError, PipelineData, Record, ShellError, Signature, Span, Spanned,
-    SyntaxShape, Type, Value, ByteStream, ByteStreamType,
+    ByteStream, ByteStreamType, LabeledError, PipelineData, Record, ShellError, Signature, Span,
+    Spanned, SyntaxShape, Type, Value,
 };
 
 // use crate::traits;
@@ -46,24 +46,14 @@ impl PluginCommand for HTTPServe {
         call: &EvaluatedCall,
         input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-        let (tx, mut rx) = watch::channel(false);
+        let (ctrlc_tx, ctrlc_rx) = tokio::sync::watch::channel(false);
 
-        /*
-        match input {
-            PipelineData::ExternalStream { exit_code, .. } => {
-                let exit_code = exit_code.unwrap();
-                std::thread::spawn(move || {
-                    exit_code.drain();
-                    let _ = tx.send(true);
-                    eprintln!("i'm outie");
-                });
-            }
-            _ => return Err(LabeledError::new("ExternalStream expected")),
-        }
-        */
+        let _guard = engine.register_ctrlc_handler(Box::new(move || {
+            let _ = ctrlc_tx.send(true);
+        }));
 
         plugin.runtime.block_on(async move {
-            let _ = serve(engine, call, rx).await;
+            let _ = serve(ctrlc_rx, _guard, engine, call).await;
         });
 
         let span = call.head;
@@ -104,26 +94,32 @@ fn run_eval(
     let closure = call.req(0).unwrap();
     let span = call.head;
 
-        let stream = ByteStream::from_fn(
-            span,
-            None,
-            ByteStreamType::Unknown,
-            move |buffer: &mut Vec<u8>| match rx.blocking_recv() {
-                Some(Ok(bytes)) => {
-                    buffer.extend_from_slice(&bytes);
-                    Ok(true)
-                }
-                Some(Err(err)) => Err(ShellError::LabeledError(Box::new(LabeledError::new(
-                    format!("Read error: {}", err),
-                )))),
-                None => Ok(false),
-            },
-        );
+    let stream = ByteStream::from_fn(
+        span,
+        None,
+        ByteStreamType::Unknown,
+        move |buffer: &mut Vec<u8>| match rx.blocking_recv() {
+            Some(Ok(bytes)) => {
+                buffer.extend_from_slice(&bytes);
+                Ok(true)
+            }
+            Some(Err(err)) => Err(ShellError::LabeledError(Box::new(LabeledError::new(
+                format!("Read error: {}", err),
+            )))),
+            None => Ok(false),
+        },
+    );
 
     eprintln!("HERE");
 
     let res = engine
-        .eval_closure_with_stream(&closure, vec![Value::record(meta, span)], stream.into(), true, false)
+        .eval_closure_with_stream(
+            &closure,
+            vec![Value::record(meta, span)],
+            stream.into(),
+            true,
+            false,
+        )
         .map_err(|err| LabeledError::new(format!("shell error: {}", err)))
         .unwrap();
 
@@ -158,7 +154,9 @@ fn run_eval(
             }
         }
         */
-        PipelineData::ByteStream(_, _) => { panic!() }
+        PipelineData::ByteStream(_, _) => {
+            panic!()
+        }
         PipelineData::Empty => (),
     }
 }
@@ -231,9 +229,10 @@ async fn hello(
 }
 
 async fn serve(
+    mut ctrlc_rx: watch::Receiver<bool>,
+    _guard: ctrlc::Guard,
     engine: &EngineInterface,
     call: &EvaluatedCall,
-    mut rx: watch::Receiver<bool>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let socket_path = Path::new("./").join("sock");
     let listener = tokio::net::UnixListener::bind(socket_path)?;
@@ -256,7 +255,7 @@ async fn serve(
                     },
                 }
             },
-            _ = rx.changed() => {
+            _ = ctrlc_rx.changed() => {
                 // TODO: graceful shutdown of inflight connections
                 break;
             },
