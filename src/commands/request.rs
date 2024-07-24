@@ -69,7 +69,7 @@ impl PluginCommand for HTTPRequest {
 
         let _guard = engine.register_ctrlc_handler(Box::new(move || {
             let _ = ctrlc_tx.send(true);
-        }));
+        }))?;
 
         let (meta, mut rx) = plugin
             .runtime

@@ -50,7 +50,7 @@ impl PluginCommand for HTTPServe {
 
         let _guard = engine.register_ctrlc_handler(Box::new(move || {
             let _ = ctrlc_tx.send(true);
-        }));
+        }))?;
 
         plugin.runtime.block_on(async move {
             let _ = serve(ctrlc_rx, _guard, engine, call).await;
