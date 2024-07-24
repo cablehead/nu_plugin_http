@@ -98,7 +98,7 @@ impl PluginCommand for HTTPRequest {
 
         let stream = ByteStream::from_fn(
             span,
-            None,
+            engine.signals().clone(),
             ByteStreamType::Unknown,
             move |buffer: &mut Vec<u8>| match rx.blocking_recv() {
                 Some(Ok(bytes)) => {
