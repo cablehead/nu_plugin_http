@@ -61,8 +61,6 @@ impl PluginCommand for HTTPRequest {
             .to_string_lossy()
             .into_owned();
 
-        eprintln!("input: {:?}", &input);
-
         let body = bridge::Body::from_pipeline_data(input)?;
 
         let (ctrlc_tx, ctrlc_rx) = tokio::sync::watch::channel(false);
@@ -75,8 +73,6 @@ impl PluginCommand for HTTPRequest {
             .runtime
             .block_on(async move { request(ctrlc_rx, _guard, method, url, body).await })
             .unwrap();
-
-        eprintln!("meta: {:?}", &meta);
 
         let closure = call.opt(2)?;
         let span = call.head;
@@ -112,8 +108,6 @@ impl PluginCommand for HTTPRequest {
             },
         );
 
-        eprintln!("peace");
-
         if let Some(closure) = closure {
             let res = engine
                 .eval_closure_with_stream(&closure, vec![r], stream.into(), true, false)
@@ -136,10 +130,6 @@ async fn request(
     // TODO: bring back TCP support (and TLS :/)
 
     let (path, url) = split_unix_socket_url(&url);
-    // method, path, url
-    eprintln!("REQUEST: {} {} {}", method, path, url);
-
-    eprintln!("{}", std::env::current_dir().unwrap().display());
 
     let stream = tokio::net::UnixStream::connect(path)
         .await

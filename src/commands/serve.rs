@@ -110,8 +110,6 @@ fn run_eval(
         },
     );
 
-    eprintln!("HERE");
-
     let res = engine
         .eval_closure_with_stream(
             &closure,
@@ -190,7 +188,6 @@ async fn hello(
 
     tokio::task::spawn(async move {
         while let Some(frame) = body.frame().await {
-            eprintln!("FRAME: {:?}", &frame);
             match frame {
                 Ok(data) => {
                     // Send the frame data through the channel
@@ -220,7 +217,6 @@ async fn hello(
     let stream = ReceiverStream::new(rx);
     let stream = stream.map(|data| {
         data.map(|data| {
-            eprintln!("streaming");
             Frame::data(bytes::Bytes::from(data))
         })
     });
