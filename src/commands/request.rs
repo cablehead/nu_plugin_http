@@ -14,7 +14,7 @@ use hyper_util::rt::TokioIo;
 use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
 use nu_protocol::{
     engine::ctrlc, ByteStream, ByteStreamType, LabeledError, PipelineData, Record, ShellError,
-    Signature, SyntaxShape, Type, Value,
+    Signals, Signature, SyntaxShape, Type, Value,
 };
 
 use crate::bridge;
@@ -94,7 +94,8 @@ impl PluginCommand for HTTPRequest {
 
         let stream = ByteStream::from_fn(
             span,
-            engine.signals().clone(),
+            // replace with engine.signals() once I work out how to reset that
+            Signals::empty(),
             ByteStreamType::Unknown,
             move |buffer: &mut Vec<u8>| match rx.blocking_recv() {
                 Some(Ok(bytes)) => {
@@ -128,9 +129,8 @@ async fn request(
     body: bridge::Body,
 ) -> Result<(Parts, Receiver<Result<Bytes, Error>>), Box<dyn std::error::Error>> {
     // TODO: bring back TCP support (and TLS :/)
-
     let (path, url) = split_unix_socket_url(&url);
-
+    let path = Path::new(path).canonicalize().unwrap();
     let stream = tokio::net::UnixStream::connect(path)
         .await
         .expect("Failed to connect to server");

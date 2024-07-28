@@ -15,8 +15,8 @@ http-body-util = "0.1.1"
 tokio-stream = "0.1.15"
 http-body = "1.0.0"
 
-# nu-plugin = "0.94.2"
-# nu-protocol = "0.94.2"
+# nu-plugin = "0.96"
+# nu-protocol = "0.96"
 
 nu-plugin = { path = "/Users/andy/.s/sessions/03B73LNTW7UJJP1EWGDQMZNH3/nushell/crates/nu-plugin"}
 nu-protocol = { path = "/Users/andy/.s/sessions/03B73LNTW7UJJP1EWGDQMZNH3/nushell/crates/nu-protocol"}
