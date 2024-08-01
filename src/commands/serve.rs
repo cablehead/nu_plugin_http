@@ -6,10 +6,10 @@ use std::path::Path;
 
 use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
 
-use nu_protocol::engine::{ctrlc, Closure};
+use nu_protocol::engine::Closure;
 use nu_protocol::{
-    ByteStream, ByteStreamType, LabeledError, PipelineData, Record, ShellError, Signature, Span,
-    Spanned, SyntaxShape, Type, Value,
+    ByteStream, ByteStreamType, HandlerGuard, LabeledError, PipelineData, Record, ShellError,
+    Signature, Span, Spanned, SyntaxShape, Type, Value,
 };
 
 // use crate::traits;
@@ -48,7 +48,7 @@ impl PluginCommand for HTTPServe {
     ) -> Result<PipelineData, LabeledError> {
         let (ctrlc_tx, ctrlc_rx) = tokio::sync::watch::channel(false);
 
-        let _guard = engine.register_ctrlc_handler(Box::new(move || {
+        let _guard = engine.register_signal_handler(Box::new(move |_| {
             let _ = ctrlc_tx.send(true);
         }))?;
 
@@ -215,18 +215,14 @@ async fn hello(
     });
 
     let stream = ReceiverStream::new(rx);
-    let stream = stream.map(|data| {
-        data.map(|data| {
-            Frame::data(bytes::Bytes::from(data))
-        })
-    });
+    let stream = stream.map(|data| data.map(|data| Frame::data(bytes::Bytes::from(data))));
     let body = StreamBody::new(stream).boxed();
     Ok(Response::new(body))
 }
 
 async fn serve(
     mut ctrlc_rx: watch::Receiver<bool>,
-    _guard: ctrlc::Guard,
+    _guard: HandlerGuard,
     engine: &EngineInterface,
     call: &EvaluatedCall,
 ) -> Result<(), Box<dyn std::error::Error>> {

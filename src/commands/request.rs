@@ -13,8 +13,8 @@ use hyper_util::rt::TokioIo;
 
 use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
 use nu_protocol::{
-    engine::ctrlc, ByteStream, ByteStreamType, LabeledError, PipelineData, Record, ShellError,
-    Signals, Signature, SyntaxShape, Type, Value,
+    ByteStream, ByteStreamType, HandlerGuard, LabeledError, PipelineData, Record, ShellError,
+    Signature, SyntaxShape, Type, Value,
 };
 
 use crate::bridge;
@@ -42,7 +42,7 @@ impl PluginCommand for HTTPRequest {
                 SyntaxShape::Closure(Some(vec![SyntaxShape::Record(vec![])])),
                 "The closure to evaluate",
             )
-            .input_output_type(Type::String, Type::Any)
+            .input_output_type(Type::Any, Type::Any)
     }
 
     fn run(
@@ -65,7 +65,7 @@ impl PluginCommand for HTTPRequest {
 
         let (ctrlc_tx, ctrlc_rx) = tokio::sync::watch::channel(false);
 
-        let _guard = engine.register_ctrlc_handler(Box::new(move || {
+        let _guard = engine.register_signal_handler(Box::new(move |_| {
             let _ = ctrlc_tx.send(true);
         }))?;
 
@@ -94,8 +94,7 @@ impl PluginCommand for HTTPRequest {
 
         let stream = ByteStream::from_fn(
             span,
-            // replace with engine.signals() once I work out how to reset that
-            Signals::empty(),
+            engine.signals().clone(),
             ByteStreamType::Unknown,
             move |buffer: &mut Vec<u8>| match rx.blocking_recv() {
                 Some(Ok(bytes)) => {
@@ -123,7 +122,7 @@ impl PluginCommand for HTTPRequest {
 
 async fn request(
     mut ctrlc_rx: tokio::sync::watch::Receiver<bool>,
-    _guard: ctrlc::Guard,
+    _guard: HandlerGuard,
     method: String,
     url: String,
     body: bridge::Body,
