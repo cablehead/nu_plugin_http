@@ -8,8 +8,8 @@ use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
 
 use nu_protocol::engine::Closure;
 use nu_protocol::{
-    ByteStream, ByteStreamType, HandlerGuard, LabeledError, PipelineData, Record, ShellError,
-    Signature, Span, Spanned, SyntaxShape, Type, Value,
+    ByteStream, ByteStreamType, HandlerGuard, IntoSpanned, LabeledError, PipelineData, Record,
+    ShellError, Signature, Span, Spanned, SyntaxShape, Type, Value,
 };
 
 // use crate::traits;
@@ -30,7 +30,7 @@ impl PluginCommand for HTTPServe {
 
     fn signature(&self) -> Signature {
         Signature::build(PluginCommand::name(self))
-            // .required("url", SyntaxShape::String, "the url to service")
+            .required("path", SyntaxShape::String, "UNIX socket path to bind to")
             .required(
                 "closure",
                 SyntaxShape::Closure(Some(vec![SyntaxShape::Record(vec![])])),
@@ -39,6 +39,7 @@ impl PluginCommand for HTTPServe {
             .input_output_type(Type::Any, Type::Any)
     }
 
+    // run -> serve -> serve_connection -> hello -> run_eval
     fn run(
         &self,
         plugin: &HTTPPlugin,
@@ -46,6 +47,10 @@ impl PluginCommand for HTTPServe {
         call: &EvaluatedCall,
         input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
+        let span = call.head;
+        let path = call.req::<Value>(0)?.into_string()?;
+        let closure = call.req::<Value>(1)?.into_closure()?.into_spanned(span);
+
         let (ctrlc_tx, ctrlc_rx) = tokio::sync::watch::channel(false);
 
         let _guard = engine.register_signal_handler(Box::new(move |_| {
@@ -53,7 +58,10 @@ impl PluginCommand for HTTPServe {
         }))?;
 
         plugin.runtime.block_on(async move {
-            let _ = serve(ctrlc_rx, _guard, engine, call).await;
+            let res = serve(ctrlc_rx, _guard, engine, span, closure, path).await;
+            if let Err(err) = res {
+                eprintln!("serve error: {:?}", err);
+            }
         });
 
         let span = call.head;
@@ -86,14 +94,12 @@ use http_body_util::StreamBody;
 
 fn run_eval(
     engine: &EngineInterface,
-    call: &EvaluatedCall,
+    span: Span,
+    closure: Spanned<Closure>,
     meta: Record,
     mut rx: mpsc::Receiver<Result<Vec<u8>, hyper::Error>>,
     mut tx: mpsc::Sender<Result<Vec<u8>, ShellError>>,
 ) {
-    let closure = call.req(0).unwrap();
-    let span = call.head;
-
     let stream = ByteStream::from_fn(
         span,
         engine.signals().clone(),
@@ -161,11 +167,10 @@ fn run_eval(
 
 async fn hello(
     engine: &EngineInterface,
-    call: &EvaluatedCall,
+    span: Span,
+    closure: Spanned<Closure>,
     req: Request<hyper::body::Incoming>,
 ) -> Result<Response<BoxBody<Bytes, ShellError>>, hyper::Error> {
-    let span = call.head;
-
     let mut headers = Record::new();
     for (key, value) in req.headers() {
         headers.insert(
@@ -208,10 +213,9 @@ async fn hello(
     });
 
     let engine = engine.clone();
-    let call = call.clone();
 
     std::thread::spawn(move || {
-        run_eval(&engine, &call, meta, closure_rx, closure_tx);
+        run_eval(&engine, span, closure, meta, closure_rx, closure_tx);
     });
 
     let stream = ReceiverStream::new(rx);
@@ -224,10 +228,22 @@ async fn serve(
     mut ctrlc_rx: watch::Receiver<bool>,
     _guard: HandlerGuard,
     engine: &EngineInterface,
-    call: &EvaluatedCall,
+    span: Span,
+    closure: Spanned<Closure>,
+    socket_path: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let socket_path = Path::new("./").join("sock");
-    let listener = tokio::net::UnixListener::bind(socket_path)?;
+    let listener = tokio::net::UnixListener::bind(&socket_path).map_err(|err| {
+        let real_path =
+            std::fs::canonicalize(&socket_path).unwrap_or_else(|_| socket_path.clone().into());
+        std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!(
+                "Error binding to socket: '{}': {}",
+                real_path.display(),
+                err
+            ),
+        )
+    })?;
 
     use tokio::sync::watch;
 
@@ -238,7 +254,8 @@ async fn serve(
                     Ok((stream, _)) => {
                         tokio::task::spawn(serve_connection(
                             engine.clone(),
-                            call.clone(),
+                            span.clone(),
+                            closure.clone(),
                             TokioIo::new(stream),
                         ));
                     },
@@ -258,11 +275,15 @@ async fn serve(
 
 async fn serve_connection<T: std::marker::Unpin + tokio::io::AsyncWrite + tokio::io::AsyncRead>(
     engine: EngineInterface,
-    call: EvaluatedCall,
+    span: Span,
+    closure: Spanned<Closure>,
     io: TokioIo<T>,
 ) {
     if let Err(err) = http1::Builder::new()
-        .serve_connection(io, service_fn(|req| hello(&engine, &call, req)))
+        .serve_connection(
+            io,
+            service_fn(|req| hello(&engine, span, closure.clone(), req)),
+        )
         .await
     {
         // Match against the error kind to selectively ignore `NotConnected` errors
