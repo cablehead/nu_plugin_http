@@ -42,6 +42,12 @@ impl PluginCommand for HTTPRequest {
                 SyntaxShape::Closure(Some(vec![SyntaxShape::Record(vec![])])),
                 "The closure to evaluate",
             )
+            .named(
+                "headers",
+                SyntaxShape::Record(vec![]),
+                "Optional request headers",
+                Some('H'),
+            )
             .input_output_type(Type::Any, Type::Any)
     }
 
@@ -52,30 +58,36 @@ impl PluginCommand for HTTPRequest {
         call: &EvaluatedCall,
         input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-        let method = call.req::<String>(0)?;
+        let span = call.head;
 
+        let method = call.req::<String>(0)?;
         let url = call.req::<String>(1)?;
+        let closure = call.opt(2)?;
+
+        let headers = call.named.clone().into_iter().find_map(|(key, val)| {
+            if key.item == "headers" {
+                val.and_then(|v| v.into_record().ok())
+            } else {
+                None
+            }
+        });
+
         let cwd = engine.get_current_dir()?;
         let url = Path::new(&cwd)
             .join(Path::new(&url))
             .to_string_lossy()
             .into_owned();
 
-        let body = bridge::Body::from_pipeline_data(input)?;
-
         let (ctrlc_tx, ctrlc_rx) = tokio::sync::watch::channel(false);
-
         let _guard = engine.register_signal_handler(Box::new(move |_| {
             let _ = ctrlc_tx.send(true);
         }))?;
 
+        let body = bridge::Body::from_pipeline_data(input)?;
         let (meta, mut rx) = plugin
             .runtime
-            .block_on(async move { request(ctrlc_rx, _guard, method, url, body).await })
+            .block_on(async move { request(ctrlc_rx, _guard, method, headers, url, body).await })
             .unwrap();
-
-        let closure = call.opt(2)?;
-        let span = call.head;
 
         let mut headers = Record::new();
         for (key, value) in meta.headers.iter() {
@@ -124,6 +136,7 @@ async fn request(
     mut ctrlc_rx: tokio::sync::watch::Receiver<bool>,
     _guard: HandlerGuard,
     method: String,
+    headers: Option<Record>,
     url: String,
     body: bridge::Body,
 ) -> Result<(Parts, Receiver<Result<Bytes, Error>>), Box<dyn std::error::Error>> {
@@ -150,7 +163,13 @@ async fn request(
 
     let method = http::method::Method::from_str(&method.to_uppercase())?;
     let body = body.into_http_body();
-    let req = Request::builder().method(method).uri(url).body(body)?;
+    let mut req = Request::builder().method(method).uri(url);
+    if let Some(headers) = headers {
+        for (key, value) in headers.into_iter() {
+            req = req.header(key, value.into_string()?);
+        }
+    }
+    let req = req.body(body)?;
 
     let res = request_sender.send_request(req).await?;
     let (meta, mut body) = res.into_parts();
