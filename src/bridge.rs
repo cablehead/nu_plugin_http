@@ -1,17 +1,21 @@
+use std::io::Read;
 use std::pin::Pin;
 
 use bytes::Bytes;
 
-use http_body_util::BodyExt;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
 
-use tokio::sync::mpsc::Receiver;
+use http_body_util::BodyExt;
+use http_body_util::StreamBody;
+use hyper::body::Frame;
 
 use nu_protocol::{LabeledError, PipelineData, Value};
 
 pub enum Body {
     Empty,
     Full(Vec<u8>),
-    Stream(Receiver<Vec<u8>>),
+    Stream(tokio::sync::mpsc::Receiver<Vec<u8>>),
 }
 
 impl Body {
@@ -26,11 +30,36 @@ impl Body {
                 ))),
             },
             PipelineData::ListStream(_, _) => {
-                panic!()
+                panic!("ListStream not supported")
             }
-            PipelineData::ByteStream(_, _) => {
-                panic!()
+
+            PipelineData::ByteStream(stream, _) => {
+                if let Some(mut reader) = stream.reader() {
+                    let (tx, rx) = tokio::sync::mpsc::channel(100); // Adjust buffer size as needed
+                    std::thread::spawn(move || {
+                        let mut buffer = [0; 4096]; // Adjust buffer size as needed
+                        loop {
+                            match reader.read(&mut buffer) {
+                                Ok(0) => break, // End of stream
+                                Ok(n) => {
+                                    if tx.blocking_send(buffer[..n].to_vec()).is_err() {
+                                        break; // Channel closed, stop sending
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("Error reading from ByteStream: {:?}", e);
+                                    break;
+                                }
+                            }
+                        }
+                    });
+
+                    Ok(Body::Stream(rx))
+                } else {
+                    Ok(Body::Empty) // Stream is empty
+                }
             }
+
             PipelineData::Empty => Ok(Body::Empty),
         }
     }
@@ -49,7 +78,13 @@ impl Body {
                     http_body_util::Full::new(Bytes::from(data)).map_err(|never| match never {});
                 Box::pin(body)
             }
-            _ => todo!(),
+
+            Body::Stream(rx) => {
+                let stream = ReceiverStream::new(rx);
+                let stream = stream.map(|data| Ok(Frame::data(bytes::Bytes::from(data))));
+                let body = StreamBody::new(stream).boxed();
+                Box::pin(body)
+            }
         }
     }
 }

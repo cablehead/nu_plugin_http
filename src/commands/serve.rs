@@ -83,10 +83,9 @@ use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
-use tokio_stream::StreamExt;
-
 use tokio::sync::watch;
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
 
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
