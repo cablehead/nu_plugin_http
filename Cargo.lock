@@ -710,9 +710,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.2.6"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "168fb715dda47215e360912c096649d23d58bf392ac62f73919e831745e40f26"
+checksum = "93ead53efc7ea8ed3cfb0c79fc8023fbb782a5432b52830b6518941cebe6505c"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.3",
@@ -968,7 +968,7 @@ dependencies = [
 
 [[package]]
 name = "nu-derive-value"
-version = "0.96.2"
+version = "0.97.1"
 dependencies = [
  "convert_case",
  "proc-macro-error",
@@ -979,7 +979,7 @@ dependencies = [
 
 [[package]]
 name = "nu-engine"
-version = "0.96.2"
+version = "0.97.1"
 dependencies = [
  "log",
  "nu-glob",
@@ -991,11 +991,11 @@ dependencies = [
 
 [[package]]
 name = "nu-glob"
-version = "0.96.2"
+version = "0.97.1"
 
 [[package]]
 name = "nu-path"
-version = "0.96.2"
+version = "0.97.1"
 dependencies = [
  "dirs",
  "omnipath",
@@ -1004,7 +1004,7 @@ dependencies = [
 
 [[package]]
 name = "nu-plugin"
-version = "0.96.2"
+version = "0.97.1"
 dependencies = [
  "log",
  "nix",
@@ -1018,7 +1018,7 @@ dependencies = [
 
 [[package]]
 name = "nu-plugin-core"
-version = "0.96.2"
+version = "0.97.1"
 dependencies = [
  "interprocess",
  "log",
@@ -1032,7 +1032,7 @@ dependencies = [
 
 [[package]]
 name = "nu-plugin-protocol"
-version = "0.96.2"
+version = "0.97.1"
 dependencies = [
  "bincode",
  "nu-protocol",
@@ -1044,7 +1044,7 @@ dependencies = [
 
 [[package]]
 name = "nu-protocol"
-version = "0.96.2"
+version = "0.97.1"
 dependencies = [
  "brotli",
  "byte-unit",
@@ -1074,7 +1074,7 @@ dependencies = [
 
 [[package]]
 name = "nu-system"
-version = "0.96.2"
+version = "0.97.1"
 dependencies = [
  "chrono",
  "itertools",
@@ -1092,7 +1092,7 @@ dependencies = [
 
 [[package]]
 name = "nu-utils"
-version = "0.96.2"
+version = "0.97.1"
 dependencies = [
  "crossterm_winapi",
  "log",

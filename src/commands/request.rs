@@ -209,7 +209,7 @@ async fn request(
 }
 
 fn split_unix_socket_url(url: &str) -> (&str, &str) {
-    if let Some(pos) = url.rfind("//") {
+    if let Some(pos) = url.find("//") {
         let (path, url) = url.split_at(pos);
         let url = &url[1..]; // Skip the first '/'
         (path, url)
@@ -236,6 +236,14 @@ mod tests {
         let (path, url) = split_unix_socket_url(url);
         assert_eq!(path, "./store/sock");
         assert_eq!(url, "/");
+    }
+
+    #[test]
+    fn test_sha256() {
+        let url = "./store/sock//cas/sha256-k//MXqRXKqeE+7S7SkKSbpU3dWrxwzh/iR6v683XTyE=";
+        let (path, url) = split_unix_socket_url(url);
+        assert_eq!(path, "./store/sock");
+        assert_eq!(url, "/cas/sha256-k//MXqRXKqeE+7S7SkKSbpU3dWrxwzh/iR6v683XTyE=");
     }
 
     #[test]
